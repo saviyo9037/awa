@@ -320,7 +320,13 @@ export default function ProfileScreen() {
             <div>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-sans truncate">
-                  {isPro ? "PRO Tier" : "Free Tier"}
+                  {user?.subscriptionPlan === "lifetime"
+                    ? "Lifetime PRO"
+                    : user?.subscriptionPlan === "yearly"
+                    ? "Yearly PRO"
+                    : isPro
+                    ? "PRO Tier"
+                    : "Free Tier"}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
@@ -585,7 +591,13 @@ export default function ProfileScreen() {
                       Current Plan
                     </span>
                     <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                      {isPro ? "AWA Pro Creator (Yearly)" : "Free Starter Account"}
+                      {user?.subscriptionPlan === "lifetime"
+                        ? "AWA Pro Lifetime Founder"
+                        : user?.subscriptionPlan === "yearly"
+                        ? "AWA Pro Creator (Yearly)"
+                        : isPro
+                        ? "AWA Pro Creator"
+                        : "Free Starter Account"}
                     </h3>
                   </div>
                   <span className="px-3.5 py-1 rounded-full text-xs font-bold uppercase font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">

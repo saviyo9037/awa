@@ -36,10 +36,10 @@ export async function GET(request: NextRequest) {
       const user = userMap.get(sub.user_id) || null;
       return {
         ...sub,
-        user_email: user?.email || "Unknown user",
-        user_name: user?.name || "Guest Creator",
-        user_is_pro: user?.is_pro || false,
-        user_credits: user?.credits ?? 5,
+        user_email: user?.email || "",
+        user_name: user?.name || (user?.email ? user.email.split("@")[0] : ""),
+        user_is_pro: Boolean(user?.is_pro),
+        user_credits: user?.credits ?? 0,
         user,
       };
     });
@@ -139,8 +139,8 @@ export async function POST(request: NextRequest) {
 
     // 2. Insert subscription record
     const subId = `sub-${Date.now()}`;
-    const priceFormatted = amount || (plan === "lifetime" ? "₹999" : plan === "yearly" ? "₹199" : "₹0");
-    const payRef = paymentId || `admin_grant_${Date.now()}`;
+    const priceFormatted = amount ? String(amount).trim() : (plan === "lifetime" ? "₹999" : plan === "yearly" ? "₹199" : "₹0");
+    const payRef = paymentId ? String(paymentId).trim() : null;
 
     const { data: newSub, error: subErr } = await supabase
       .from("subscriptions")
