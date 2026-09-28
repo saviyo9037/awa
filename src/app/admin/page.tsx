@@ -64,7 +64,14 @@ import {
   Presentation,
   Calendar,
   CreditCard,
-  Crown
+  Crown,
+  TrendingUp,
+  TrendingDown,
+  Download,
+  Filter,
+  DollarSign,
+  PieChart,
+  LineChart
 } from "lucide-react";
 import AwaLogo from "@/components/AwaLogo";
 import { useAuth } from "@/context/AuthContext";
@@ -220,7 +227,58 @@ export default function AdminPage() {
     is_popular: false,
     is_active: true,
   });
-  const [subViewTab, setSubViewTab] = useState<"plans" | "subscribers">("plans");
+  const [subViewTab, setSubViewTab] = useState<"analytics" | "subscribers" | "plans">("analytics");
+  const [subTimeRange, setSubTimeRange] = useState<"7d" | "30d" | "90d" | "1y" | "all">("30d");
+  const [chartMetric, setChartMetric] = useState<"revenue" | "orders">("revenue");
+  const [chartType, setChartType] = useState<"area" | "bar">("area");
+  const [hoveredChartPoint, setHoveredChartPoint] = useState<any | null>(null);
+  const [subDateFilter, setSubDateFilter] = useState<"all" | "7d" | "30d" | "90d" | "1y">("all");
+
+  const handleExportSubscriptionsCSV = (subsToExport: any[]) => {
+    if (!subsToExport || subsToExport.length === 0) {
+      showToast("No subscription records available to export");
+      return;
+    }
+    const headers = [
+      "Subscription ID",
+      "Customer Name",
+      "Customer Email",
+      "Plan Tier",
+      "Amount Paid",
+      "Status",
+      "Credits",
+      "Payment ID",
+      "Created At"
+    ];
+    const rows = subsToExport.map((s) => {
+      const userObj = s.user || adminUsers.find((u) => u.id === s.user_id) || null;
+      const email = s.user_email || userObj?.email || "";
+      const name = s.user_name || userObj?.name || (email ? email.split("@")[0] : "User");
+      const credits = s.user_credits ?? userObj?.credits ?? 0;
+      return [
+        `"${String(s.id || "").replace(/"/g, '""')}"`,
+        `"${String(name).replace(/"/g, '""')}"`,
+        `"${String(email).replace(/"/g, '""')}"`,
+        `"${String(s.plan || "").replace(/"/g, '""')}"`,
+        `"${String(s.amount || "").replace(/"/g, '""')}"`,
+        `"${String(s.status || "").replace(/"/g, '""')}"`,
+        credits,
+        `"${String(s.payment_id || "").replace(/"/g, '""')}"`,
+        `"${s.created_at ? new Date(s.created_at).toISOString() : ""}"`
+      ].join(",");
+    });
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `awa_subscriptions_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Subscriptions report exported to CSV! 📥");
+  };
 
   // Subscriptions & User Management State
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
@@ -1503,15 +1561,25 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="p-6 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm">
+                <div 
+                  onClick={() => {
+                    setActiveTab("subscriptions");
+                    setSubViewTab("analytics");
+                  }}
+                  className="p-6 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm cursor-pointer hover:border-emerald-500/40 hover:shadow-md transition-all group"
+                  title="Click to view full Revenue Growth & Analytics"
+                >
                   <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Revenue</span>
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 group-hover:text-emerald-500 transition-colors">Total Revenue</span>
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Banknote className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-3xl font-extrabold tracking-tight mb-1 text-emerald-500">{stats?.totalRevenue ?? "₹0"}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Lifetime PRO sales</div>
+                  <div className="text-3xl font-extrabold tracking-tight mb-1 text-emerald-500">{subscriptionStats?.totalRevenue || stats?.totalRevenue || "₹0"}</div>
+                  <div className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>View Growth &amp; Trajectory Charts →</span>
+                  </div>
                 </div>
 
                 <div className="p-6 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm">
@@ -3500,6 +3568,229 @@ export default function AdminPage() {
           {/* TAB: SUBSCRIPTIONS & PLANS MANAGEMENT */}
           {/* ========================================================================= */}
           {activeTab === "subscriptions" && (() => {
+            // Helpers
+            const parseAmount = (amt: any): number => {
+              return parseFloat(String(amt || "0").replace(/[^0-9.]/g, "")) || 0;
+            };
+
+            const parseDate = (d: any): Date | null => {
+              if (!d) return null;
+              const parsed = new Date(d);
+              return isNaN(parsed.getTime()) ? null : parsed;
+            };
+
+            // Time range filtering logic
+            const now = new Date();
+            let cutoffMs = 0;
+            let prevCutoffMs = 0;
+            if (subTimeRange === "7d") {
+              cutoffMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+              prevCutoffMs = cutoffMs - 7 * 24 * 60 * 60 * 1000;
+            } else if (subTimeRange === "30d") {
+              cutoffMs = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+              prevCutoffMs = cutoffMs - 30 * 24 * 60 * 60 * 1000;
+            } else if (subTimeRange === "90d") {
+              cutoffMs = now.getTime() - 90 * 24 * 60 * 60 * 1000;
+              prevCutoffMs = cutoffMs - 90 * 24 * 60 * 60 * 1000;
+            } else if (subTimeRange === "1y") {
+              cutoffMs = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+              prevCutoffMs = cutoffMs - 365 * 24 * 60 * 60 * 1000;
+            }
+
+            // Current period vs Previous period subscriptions (matching plan/status filters if active)
+            const currentPeriodSubs = subscriptions.filter((s) => {
+              if (subPlanFilter !== "all" && (s.plan || "").toLowerCase() !== subPlanFilter.toLowerCase()) return false;
+              if (subStatusFilter !== "all" && (s.status || "").toLowerCase() !== subStatusFilter.toLowerCase()) return false;
+              if (cutoffMs === 0) return true;
+              const d = parseDate(s.created_at);
+              return d ? d.getTime() >= cutoffMs : true;
+            });
+
+            const prevPeriodSubs = subscriptions.filter((s) => {
+              if (subPlanFilter !== "all" && (s.plan || "").toLowerCase() !== subPlanFilter.toLowerCase()) return false;
+              if (subStatusFilter !== "all" && (s.status || "").toLowerCase() !== subStatusFilter.toLowerCase()) return false;
+              if (cutoffMs === 0 || prevCutoffMs === 0) return false;
+              const d = parseDate(s.created_at);
+              return d ? d.getTime() >= prevCutoffMs && d.getTime() < cutoffMs : false;
+            });
+
+            const periodRevenue = currentPeriodSubs.reduce((acc, s) => acc + parseAmount(s.amount), 0);
+            const prevPeriodRevenue = prevPeriodSubs.reduce((acc, s) => acc + parseAmount(s.amount), 0);
+
+            let revGrowthPct = 0;
+            if (prevPeriodRevenue > 0) {
+              revGrowthPct = Math.round(((periodRevenue - prevPeriodRevenue) / prevPeriodRevenue) * 100);
+            } else if (periodRevenue > 0) {
+              revGrowthPct = 100;
+            }
+
+            let ordersGrowthPct = 0;
+            if (prevPeriodSubs.length > 0) {
+              ordersGrowthPct = Math.round(((currentPeriodSubs.length - prevPeriodSubs.length) / prevPeriodSubs.length) * 100);
+            } else if (currentPeriodSubs.length > 0) {
+              ordersGrowthPct = 100;
+            }
+
+            // All-time and general financial metrics
+            const totalGrossRevenue = subscriptions.reduce((acc, s) => acc + parseAmount(s.amount), 0);
+            const activeSubs = subscriptions.filter((s) => s.status === "active");
+            const aov = currentPeriodSubs.length > 0 ? Math.round(periodRevenue / currentPeriodSubs.length) : 0;
+            const totalUsers = subscriptionStats?.totalUsers ?? adminUsers.length ?? 0;
+            const conversionRate = totalUsers > 0 ? ((activeSubs.length / totalUsers) * 100).toFixed(1) : "0.0";
+
+            // Estimated MRR & ARR
+            const estimatedMRR = activeSubs.reduce((acc, s) => {
+              const amt = parseAmount(s.amount);
+              const p = (s.plan || "").toLowerCase();
+              if (p.includes("month")) return acc + amt;
+              if (p.includes("year")) return acc + Math.round(amt / 12);
+              return acc + Math.round(amt / 12);
+            }, 0);
+            const estimatedARR = estimatedMRR * 12;
+
+            // Generate Time-series Chart Buckets
+            type ChartPoint = {
+              key: string;
+              label: string;
+              fullDate: string;
+              revenue: number;
+              orders: number;
+            };
+
+            let buckets: { key: string; label: string; fullDate: string; start: number; end: number }[] = [];
+
+            if (subTimeRange === "7d") {
+              // 7 Daily buckets
+              for (let i = 6; i >= 0; i--) {
+                const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+                const start = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+                const end = start + 24 * 60 * 60 * 1000;
+                buckets.push({
+                  key: `day-${i}`,
+                  label: day.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }),
+                  fullDate: day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" }),
+                  start,
+                  end,
+                });
+              }
+            } else if (subTimeRange === "30d") {
+              // 10 3-day buckets for a crisp view
+              for (let i = 9; i >= 0; i--) {
+                const start = now.getTime() - (i + 1) * 3 * 24 * 60 * 60 * 1000;
+                const end = now.getTime() - i * 3 * 24 * 60 * 60 * 1000;
+                const d = new Date(start);
+                buckets.push({
+                  key: `bucket-3d-${i}`,
+                  label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                  fullDate: `${new Date(start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+                  start,
+                  end,
+                });
+              }
+            } else if (subTimeRange === "90d") {
+              // 12 Weekly buckets
+              for (let i = 11; i >= 0; i--) {
+                const start = now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000;
+                const end = now.getTime() - i * 7 * 24 * 60 * 60 * 1000;
+                const d = new Date(start);
+                buckets.push({
+                  key: `week-${i}`,
+                  label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                  fullDate: `Week of ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+                  start,
+                  end,
+                });
+              }
+            } else {
+              // 1y or all: 12 Monthly buckets
+              for (let i = 11; i >= 0; i--) {
+                const mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const start = new Date(mDate.getFullYear(), mDate.getMonth(), 1).getTime();
+                const end = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 1).getTime();
+                buckets.push({
+                  key: `month-${i}`,
+                  label: mDate.toLocaleDateString("en-US", { month: "short" }),
+                  fullDate: mDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+                  start,
+                  end,
+                });
+              }
+            }
+
+            const chartData: ChartPoint[] = buckets.map((b) => {
+              const matched = currentPeriodSubs.filter((s) => {
+                const d = parseDate(s.created_at);
+                if (!d) return false;
+                const t = d.getTime();
+                return t >= b.start && t < b.end;
+              });
+              const rev = matched.reduce((acc, s) => acc + parseAmount(s.amount), 0);
+              return {
+                key: b.key,
+                label: b.label,
+                fullDate: b.fullDate,
+                revenue: rev,
+                orders: matched.length,
+              };
+            });
+
+            // SVG Canvas Metrics
+            const svgWidth = 840;
+            const svgHeight = 230;
+            const padLeft = 60;
+            const padRight = 30;
+            const padTop = 30;
+            const padBottom = 35;
+            const chartW = svgWidth - padLeft - padRight;
+            const chartH = svgHeight - padTop - padBottom;
+
+            const maxMetricVal = Math.max(
+              ...chartData.map((d) => (chartMetric === "revenue" ? d.revenue : d.orders)),
+              chartMetric === "revenue" ? 400 : 4
+            );
+
+            const points = chartData.map((d, i) => {
+              const val = chartMetric === "revenue" ? d.revenue : d.orders;
+              const x = padLeft + (chartData.length > 1 ? (i / (chartData.length - 1)) * chartW : chartW / 2);
+              const y = padTop + chartH - (val / maxMetricVal) * chartH;
+              return { ...d, val, x, y };
+            });
+
+            const pathD =
+              points.length === 0
+                ? ""
+                : `M ${points[0].x.toFixed(1)},${padTop + chartH} ` +
+                  points.map((p) => `L ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
+                  ` L ${points[points.length - 1].x.toFixed(1)},${padTop + chartH} Z`;
+
+            const lineD =
+              points.length === 0
+                ? ""
+                : `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)} ` +
+                  points.slice(1).map((p) => `L ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+
+            // Plan Breakdown calculation
+            const planBreakdown = plans.map((p) => {
+              const pSlug = (p.slug || "").toLowerCase();
+              const pName = (p.name || "").toLowerCase();
+              const pSubs = currentPeriodSubs.filter((s) => {
+                const sPlan = (s.plan || "").toLowerCase();
+                return sPlan === pSlug || sPlan === pName || sPlan.includes(pSlug);
+              });
+              const rev = pSubs.reduce((acc, s) => acc + parseAmount(s.amount), 0);
+              const share = periodRevenue > 0 ? Math.round((rev / periodRevenue) * 100) : 0;
+              return {
+                id: p.id,
+                name: p.name,
+                slug: p.slug,
+                price: p.price,
+                orders: pSubs.length,
+                revenue: rev,
+                share,
+              };
+            });
+
+            // Filtered subscriptions for the table view
             const filteredSubs = subscriptions.filter((sub) => {
               const query = subSearchQuery.toLowerCase().trim();
               const userObj = sub.user || adminUsers.find((u) => u.id === sub.user_id) || null;
@@ -3509,7 +3800,20 @@ export default function AdminPage() {
               const matchesSearch = !query || email.includes(query) || name.includes(query) || payId.includes(query);
               const matchesPlan = subPlanFilter === "all" || (sub.plan || "").toLowerCase() === subPlanFilter.toLowerCase();
               const matchesStatus = subStatusFilter === "all" || (sub.status || "").toLowerCase() === subStatusFilter.toLowerCase();
-              return matchesSearch && matchesPlan && matchesStatus;
+
+              let matchesDate = true;
+              if (subDateFilter !== "all") {
+                const d = parseDate(sub.created_at);
+                if (d) {
+                  let fCutoff = 0;
+                  if (subDateFilter === "7d") fCutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+                  else if (subDateFilter === "30d") fCutoff = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+                  else if (subDateFilter === "90d") fCutoff = now.getTime() - 90 * 24 * 60 * 60 * 1000;
+                  else if (subDateFilter === "1y") fCutoff = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+                  matchesDate = d.getTime() >= fCutoff;
+                }
+              }
+              return matchesSearch && matchesPlan && matchesStatus && matchesDate;
             });
 
             return (
@@ -3519,14 +3823,14 @@ export default function AdminPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                        Subscription Plans &amp; Pricing Engine
+                        Subscription Engine &amp; Revenue Analytics
                       </h3>
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                         LIVE SUPABASE SYNC
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Configure the pricing tiers and membership plans that users purchase on the website.
+                      Monitor platform revenue velocity, subscription growth trajectories, and manage active customer memberships.
                     </p>
                   </div>
 
@@ -3545,6 +3849,16 @@ export default function AdminPage() {
 
                     <button
                       type="button"
+                      onClick={() => handleExportSubscriptionsCSV(filteredSubs.length > 0 ? filteredSubs : subscriptions)}
+                      className="px-3.5 py-2.5 rounded-2xl bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 font-semibold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                      title="Export subscription data to CSV"
+                    >
+                      <Download className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="hidden sm:inline">Export CSV</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={handleOpenAddPlan}
                       className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer"
                     >
@@ -3555,22 +3869,22 @@ export default function AdminPage() {
                 </div>
 
                 {/* Sub-Navigation Switcher */}
-                <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
                   <button
                     type="button"
-                    onClick={() => setSubViewTab("plans")}
+                    onClick={() => setSubViewTab("analytics")}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                      subViewTab === "plans"
+                      subViewTab === "analytics"
                         ? "bg-slate-900 text-white dark:bg-white dark:text-black shadow-md"
                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
                     }`}
                   >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    <span>Subscription Plans (Pricing Tiers)</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Revenue &amp; Growth Analytics</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                      subViewTab === "plans" ? "bg-white/20 dark:bg-black/20" : "bg-slate-200 dark:bg-white/10"
+                      subViewTab === "analytics" ? "bg-white/20 dark:bg-black/20" : "bg-slate-200 dark:bg-white/10"
                     }`}>
-                      {plans.length}
+                      {subscriptionStats?.totalRevenue || "₹" + totalGrossRevenue.toLocaleString("en-IN")}
                     </span>
                   </button>
 
@@ -3591,7 +3905,632 @@ export default function AdminPage() {
                       {subscriptions.length}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSubViewTab("plans")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      subViewTab === "plans"
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-black shadow-md"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Subscription Plans (Pricing Tiers)</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                      subViewTab === "plans" ? "bg-white/20 dark:bg-black/20" : "bg-slate-200 dark:bg-white/10"
+                    }`}>
+                      {plans.length}
+                    </span>
+                  </button>
                 </div>
+
+                {/* ========================================================================= */}
+                {/* SUB-VIEW 0: REVENUE & GROWTH ANALYTICS STUDIO */}
+                {/* ========================================================================= */}
+                {subViewTab === "analytics" && (
+                  <div className="space-y-6">
+                    {/* Time Window & Metric Toolbar */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mr-1">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Timeline:</span>
+                        </span>
+                        {(
+                          [
+                            { id: "7d", label: "7 Days" },
+                            { id: "30d", label: "30 Days" },
+                            { id: "90d", label: "90 Days" },
+                            { id: "1y", label: "1 Year" },
+                            { id: "all", label: "All Time" },
+                          ] as const
+                        ).map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setSubTimeRange(t.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              subTimeRange === t.id
+                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                                : "bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        {/* Metric Selector */}
+                        <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setChartMetric("revenue")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                              chartMetric === "revenue"
+                                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold"
+                                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                          >
+                            Revenue (₹)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChartMetric("orders")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                              chartMetric === "orders"
+                                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold"
+                                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                          >
+                            Order Units (#)
+                          </button>
+                        </div>
+
+                        {/* Chart Style Selector */}
+                        <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setChartType("area")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                              chartType === "area"
+                                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
+                                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                            title="Area Chart"
+                          >
+                            Area
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChartType("bar")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                              chartType === "bar"
+                                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
+                                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            }`}
+                            title="Bar Chart"
+                          >
+                            Bar
+                          </button>
+                        </div>
+
+                        {/* Plan Filter in Analytics */}
+                        <select
+                          value={subPlanFilter}
+                          onChange={(e) => setSubPlanFilter(e.target.value)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                        >
+                          <option value="all">All Plan Tiers</option>
+                          {plans.map((p) => (
+                            <option key={p.id} value={p.slug}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 4 Financial Performance KPI Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Card 1: Selected Period Revenue & Growth */}
+                      <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Period Gross Revenue
+                          </span>
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-sm">
+                            ₹
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                            ₹{periodRevenue.toLocaleString("en-IN")}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                revGrowthPct >= 0
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              {revGrowthPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              <span>{revGrowthPct >= 0 ? `+${revGrowthPct}%` : `${revGrowthPct}%`}</span>
+                            </span>
+                            <span className="text-[11px] text-slate-400">vs prev period</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Projected ARR & MRR */}
+                      <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Run Rate (ARR / MRR)
+                          </span>
+                          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                            <Zap className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
+                            ₹{estimatedARR.toLocaleString("en-IN")}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                            <span>MRR velocity:</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">
+                              ₹{estimatedMRR.toLocaleString("en-IN")}/mo
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Average Order Value (AOV) */}
+                      <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Average Order Value
+                          </span>
+                          <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                            <DollarSign className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                            ₹{aov.toLocaleString("en-IN")}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            Across {currentPeriodSubs.length} purchase{currentPeriodSubs.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Card 4: Conversion Rate & Active Members */}
+                      <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Paying Conversion Rate
+                          </span>
+                          <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center">
+                            <Users className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-cyan-600 dark:text-cyan-400">
+                            {conversionRate}%
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            {activeSubs.length} active of {totalUsers} users
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Interactive Visual Growth Chart */}
+                    <div className="p-6 rounded-3xl bg-white/90 dark:bg-[#0c0e18]/90 border border-slate-200 dark:border-white/10 shadow-sm space-y-4 relative overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                            <LineChart className="w-4 h-4 text-indigo-500" />
+                            <span>
+                              {chartMetric === "revenue" ? "Gross Revenue Trajectory" : "Subscription Orders Growth"}
+                            </span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                              REALTIME
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Interactive visual curve across the selected {subTimeRange.toUpperCase()} window. Hover over points for metrics breakdown.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                            <span>
+                              {chartMetric === "revenue"
+                                ? `₹${periodRevenue.toLocaleString("en-IN")} Total`
+                                : `${currentPeriodSubs.length} Orders`}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* SVG Canvas Area */}
+                      <div className="w-full overflow-x-auto pt-2">
+                        <div className="min-w-[640px]">
+                          <svg
+                            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                            className="w-full h-auto select-none overflow-visible"
+                          >
+                            <defs>
+                              <linearGradient id="revenueAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                              </linearGradient>
+                              <linearGradient id="revenueBarGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#818cf8" />
+                                <stop offset="100%" stopColor="#4f46e5" />
+                              </linearGradient>
+                            </defs>
+
+                            {/* Horizontal Gridlines & Y-Axis Scale */}
+                            {[1, 0.75, 0.5, 0.25, 0].map((ratio) => {
+                              const yPos = padTop + chartH * (1 - ratio);
+                              const valLabel =
+                                chartMetric === "revenue"
+                                  ? `₹${Math.round(maxMetricVal * ratio).toLocaleString("en-IN")}`
+                                  : `${Math.round(maxMetricVal * ratio)}`;
+                              return (
+                                <g key={ratio}>
+                                  <line
+                                    x1={padLeft}
+                                    y1={yPos}
+                                    x2={padLeft + chartW}
+                                    y2={yPos}
+                                    stroke="currentColor"
+                                    className="text-slate-200 dark:text-white/10"
+                                    strokeDasharray="4 4"
+                                  />
+                                  <text
+                                    x={padLeft - 10}
+                                    y={yPos + 3.5}
+                                    textAnchor="end"
+                                    className="fill-slate-400 dark:fill-slate-500 font-mono text-[10px]"
+                                  >
+                                    {valLabel}
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            {/* Chart Fill & Line (Area Mode) */}
+                            {chartType === "area" && (
+                              <>
+                                {pathD && <path d={pathD} fill="url(#revenueAreaGrad)" />}
+                                {lineD && (
+                                  <path
+                                    d={lineD}
+                                    fill="none"
+                                    stroke="#6366f1"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                )}
+                              </>
+                            )}
+
+                            {/* Bar Columns (Bar Mode) */}
+                            {chartType === "bar" &&
+                              points.map((p) => {
+                                const barWidth = Math.max(10, Math.min(28, (chartW / points.length) * 0.5));
+                                const barHeight = Math.max(2, padTop + chartH - p.y);
+                                return (
+                                  <rect
+                                    key={p.key}
+                                    x={p.x - barWidth / 2}
+                                    y={p.y}
+                                    width={barWidth}
+                                    height={barHeight}
+                                    rx="4"
+                                    className={`transition-all duration-200 cursor-pointer ${
+                                      hoveredChartPoint?.key === p.key
+                                        ? "fill-indigo-400"
+                                        : "fill-indigo-600/80 hover:fill-indigo-500"
+                                    }`}
+                                    onMouseEnter={() => setHoveredChartPoint(p)}
+                                    onMouseLeave={() => setHoveredChartPoint(null)}
+                                  />
+                                );
+                              })}
+
+                            {/* Vertical Hover Tracking Line */}
+                            {hoveredChartPoint && (
+                              <line
+                                x1={hoveredChartPoint.x}
+                                y1={padTop}
+                                x2={hoveredChartPoint.x}
+                                y2={padTop + chartH}
+                                stroke="#818cf8"
+                                strokeWidth="1.5"
+                                strokeDasharray="3 3"
+                                className="opacity-70 pointer-events-none"
+                              />
+                            )}
+
+                            {/* Data Node Points (in Area mode) */}
+                            {chartType === "area" &&
+                              points.map((p) => (
+                                <g key={p.key}>
+                                  {/* Hit target */}
+                                  <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r="16"
+                                    fill="transparent"
+                                    className="cursor-pointer"
+                                    onMouseEnter={() => setHoveredChartPoint(p)}
+                                    onMouseLeave={() => setHoveredChartPoint(null)}
+                                  />
+                                  {/* Visual dot */}
+                                  <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={hoveredChartPoint?.key === p.key ? 5.5 : 3.5}
+                                    className={`transition-all duration-150 pointer-events-none ${
+                                      hoveredChartPoint?.key === p.key
+                                        ? "fill-white stroke-indigo-600 stroke-[3px]"
+                                        : "fill-indigo-600 stroke-white dark:stroke-slate-900 stroke-[2px]"
+                                    }`}
+                                  />
+                                </g>
+                              ))}
+
+                            {/* X-Axis Date Labels */}
+                            {points.map((p, idx) => {
+                              // Filter label display on crowded buckets
+                              const showLabel =
+                                points.length <= 10 ||
+                                idx === 0 ||
+                                idx === points.length - 1 ||
+                                idx % Math.ceil(points.length / 8) === 0;
+                              if (!showLabel) return null;
+                              return (
+                                <text
+                                  key={p.key}
+                                  x={p.x}
+                                  y={padTop + chartH + 20}
+                                  textAnchor="middle"
+                                  className="fill-slate-400 dark:fill-slate-500 font-mono text-[10px]"
+                                >
+                                  {p.label}
+                                </text>
+                              );
+                            })}
+
+                            {/* Interactive Tooltip Card */}
+                            {hoveredChartPoint && (() => {
+                              const tipW = 150;
+                              const tipH = 54;
+                              const tipX = Math.min(Math.max(hoveredChartPoint.x, tipW / 2 + 10), svgWidth - tipW / 2 - 10);
+                              const tipY = Math.max(8, hoveredChartPoint.y - tipH - 12);
+                              return (
+                                <g transform={`translate(${tipX}, ${tipY})`} className="pointer-events-none transition-all duration-75">
+                                  <rect
+                                    x={-tipW / 2}
+                                    y={0}
+                                    width={tipW}
+                                    height={tipH}
+                                    rx="10"
+                                    className="fill-slate-900/95 dark:fill-[#080a12]/95 stroke-slate-700/60 dark:stroke-white/20 shadow-2xl"
+                                  />
+                                  <text
+                                    x="0"
+                                    y="16"
+                                    textAnchor="middle"
+                                    className="fill-slate-400 text-[10px] font-mono font-medium"
+                                  >
+                                    {hoveredChartPoint.label}
+                                  </text>
+                                  <text
+                                    x="0"
+                                    y="32"
+                                    textAnchor="middle"
+                                    className="fill-emerald-400 font-extrabold text-[12px]"
+                                  >
+                                    ₹{hoveredChartPoint.revenue.toLocaleString("en-IN")}
+                                  </text>
+                                  <text
+                                    x="0"
+                                    y="45"
+                                    textAnchor="middle"
+                                    className="fill-slate-300 text-[10px] font-mono"
+                                  >
+                                    {hoveredChartPoint.orders} purchase{hoveredChartPoint.orders === 1 ? "" : "s"}
+                                  </text>
+                                </g>
+                              );
+                            })()}
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Footer Insights Strip */}
+                      <div className="border-t border-slate-100 dark:border-white/10 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-500 dark:text-slate-400">Selected Window Total:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white font-mono">
+                            ₹{periodRevenue.toLocaleString("en-IN")}
+                          </span>
+                          <span className="text-slate-400 font-mono">({currentPeriodSubs.length} orders)</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSubViewTab("subscribers")}
+                            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Inspect customer orders ledger</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Deep-Dive Panels: Plan Breakdown & Lifecycle Health */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Left: Revenue Share by Plan Tier */}
+                      <div className="p-6 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                              <PieChart className="w-4 h-4 text-purple-500" />
+                              <span>Plan Revenue Share &amp; Velocity</span>
+                            </h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              Revenue breakdown by pricing tier in selected period.
+                            </p>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-slate-500">
+                            {plans.length} Tiers
+                          </span>
+                        </div>
+
+                        <div className="space-y-4 pt-2">
+                          {planBreakdown.length === 0 || plans.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic">No plans available.</p>
+                          ) : (
+                            planBreakdown.map((item, idx) => {
+                              const colors = [
+                                "bg-indigo-500",
+                                "bg-purple-500",
+                                "bg-emerald-500",
+                                "bg-pink-500",
+                                "bg-cyan-500",
+                              ];
+                              const colorClass = colors[idx % colors.length];
+
+                              return (
+                                <div key={item.id} className="space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
+                                      <span className="font-semibold text-slate-900 dark:text-white">
+                                        {item.name}
+                                      </span>
+                                      <span className="text-[10px] font-mono text-slate-400">
+                                        ({item.price})
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 font-mono">
+                                      <span className="text-slate-500 dark:text-slate-400">
+                                        {item.orders} sales
+                                      </span>
+                                      <span className="font-bold text-slate-900 dark:text-white">
+                                        ₹{item.revenue.toLocaleString("en-IN")}
+                                      </span>
+                                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 w-10 text-right">
+                                        {item.share}%
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress Bar */}
+                                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${colorClass} transition-all duration-500`}
+                                      style={{ width: `${Math.max(item.share, 2)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        <div className="border-t border-slate-100 dark:border-white/10 pt-3 flex items-center justify-between">
+                          <span className="text-xs text-slate-400">Want to tune tier pricing?</span>
+                          <button
+                            type="button"
+                            onClick={() => setSubViewTab("plans")}
+                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                          >
+                            Manage Pricing Plans →
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: Payment Health & Gateway Status */}
+                      <div className="p-6 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-4 flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                              <span>Payment Pipeline &amp; Lifecycle Health</span>
+                            </h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              Real-time gateway connectivity and customer retention telemetry.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pt-2">
+                            <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-1">
+                              <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold uppercase">
+                                Active Subscriptions
+                              </div>
+                              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                                {activeSubs.length}
+                              </div>
+                              <div className="text-[10px] text-slate-400">Generating live recurring value</div>
+                            </div>
+
+                            <div className="p-3.5 rounded-2xl bg-slate-500/5 border border-slate-500/20 space-y-1">
+                              <div className="text-[11px] font-mono text-slate-500 font-bold uppercase">
+                                Inactive / Past Due
+                              </div>
+                              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                                {subscriptions.filter((s) => s.status !== "active").length}
+                              </div>
+                              <div className="text-[10px] text-slate-400">Cancelled or lapsed accounts</div>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-600 dark:text-slate-300 font-medium">Gateway Integration</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                RAZORPAY LIVE
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-600 dark:text-slate-300 font-medium">Webhook Telemetry</span>
+                              <span className="text-emerald-500 font-mono text-[11px] font-bold">● Active 100%</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-600 dark:text-slate-300 font-medium">Auto Pro Entitlement</span>
+                              <span className="text-slate-700 dark:text-slate-200 font-mono text-[11px]">Instant on payment</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-slate-100 dark:border-white/10 pt-3 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => handleExportSubscriptionsCSV(filteredSubs.length > 0 ? filteredSubs : subscriptions)}
+                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download Full CSV Financial Ledger</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* ========================================================================= */}
                 {/* SUB-VIEW 1: SUBSCRIPTION PLANS (PRICING TIERS) */}
@@ -3852,7 +4791,19 @@ export default function AdminPage() {
                         />
                       </div>
 
-                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                        <select
+                          value={subDateFilter}
+                          onChange={(e: any) => setSubDateFilter(e.target.value)}
+                          className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                        >
+                          <option value="all">All Dates</option>
+                          <option value="7d">Last 7 Days</option>
+                          <option value="30d">Last 30 Days</option>
+                          <option value="90d">Last 90 Days</option>
+                          <option value="1y">Last 1 Year</option>
+                        </select>
+
                         <select
                           value={subPlanFilter}
                           onChange={(e) => setSubPlanFilter(e.target.value)}
@@ -3874,7 +4825,17 @@ export default function AdminPage() {
                           <option value="expired">Expired</option>
                         </select>
 
-                        <span className="text-xs text-slate-500 whitespace-nowrap hidden sm:inline">
+                        <button
+                          type="button"
+                          onClick={() => handleExportSubscriptionsCSV(filteredSubs)}
+                          className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Export filtered records to CSV"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>CSV</span>
+                        </button>
+
+                        <span className="text-xs text-slate-500 whitespace-nowrap hidden sm:inline font-mono">
                           {filteredSubs.length} found
                         </span>
                       </div>
