@@ -81,6 +81,7 @@ async function runMigration() {
         reason TEXT,
         is_primary BOOLEAN DEFAULT FALSE
       );
+      
 
       CREATE TABLE IF NOT EXISTS usage_steps (
         id TEXT PRIMARY KEY,

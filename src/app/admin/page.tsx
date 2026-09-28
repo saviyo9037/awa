@@ -62,13 +62,15 @@ import {
   MoreHorizontal,
   Globe,
   Presentation,
-  Calendar
+  Calendar,
+  CreditCard,
+  Crown
 } from "lucide-react";
 import AwaLogo from "@/components/AwaLogo";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 
-type Tab = "overview" | "templates" | "categories" | "workflow" | "tools" | "media" | "feedback" | "settings";
+type Tab = "overview" | "templates" | "categories" | "workflow" | "tools" | "media" | "feedback" | "subscriptions" | "settings";
 
 export interface GuidanceStepItem {
   step: string;
@@ -145,6 +147,7 @@ const SIDEBAR_ITEMS: { id: Tab; label: string; icon: any }[] = [
   { id: "tools", label: "AI Tools Master", icon: Cpu },
   { id: "media", label: "Media & Images", icon: ImageIcon },
   { id: "feedback", label: "Users & Feedback", icon: MessageSquare },
+  { id: "subscriptions", label: "Subscriptions & Plans", icon: CreditCard },
   { id: "settings", label: "Platform Controls", icon: Sliders },
 ];
 
@@ -198,6 +201,27 @@ export default function AdminPage() {
 
   const [showToolModal, setShowToolModal] = useState(false);
   const [editingTool, setEditingTool] = useState<any | null>(null);
+
+  // Subscriptions & User Management State
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [subscriptionStats, setSubscriptionStats] = useState<any>(null);
+  const [subSearchQuery, setSubSearchQuery] = useState("");
+  const [subPlanFilter, setSubPlanFilter] = useState("all");
+  const [subStatusFilter, setSubStatusFilter] = useState("all");
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
+  const [showAddSubModal, setShowAddSubModal] = useState(false);
+  const [editingSub, setEditingSub] = useState<any | null>(null);
+  const [savingSub, setSavingSub] = useState(false);
+  const [subForm, setSubForm] = useState({
+    email: "",
+    plan: "yearly",
+    amount: "₹199",
+    status: "active",
+    credits: 25,
+    paymentId: "",
+    is_pro: true,
+  });
 
   // Subcategories State
   const [subcategoriesMap, setSubcategoriesMap] = useState<Record<string, any[]>>({
@@ -490,7 +514,7 @@ export default function AdminPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsRes, tplRes, catRes, toolRes, fbRes, settingsRes, mediaRes, subcatRes] = await Promise.all([
+      const [statsRes, tplRes, catRes, toolRes, fbRes, settingsRes, mediaRes, subcatRes, subsRes] = await Promise.all([
         fetch("/api/admin/stats").then((r) => r.json()),
         fetch("/api/admin/templates").then((r) => r.json()),
         fetch("/api/admin/categories").then((r) => r.json()),
@@ -499,6 +523,7 @@ export default function AdminPage() {
         fetch("/api/admin/settings").then((r) => r.json()),
         fetch("/api/admin/upload").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/categories/subcategories").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/admin/subscriptions").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (statsRes.success) setStats(statsRes.data);
@@ -509,11 +534,156 @@ export default function AdminPage() {
       if (settingsRes.success) setSettings(settingsRes.data || {});
       if (mediaRes.success) setMediaAssets(mediaRes.data || []);
       if (subcatRes.success && subcatRes.data) setSubcategoriesMap(subcatRes.data);
+      if (subsRes && subsRes.success) {
+        setSubscriptions(subsRes.data || []);
+        setAdminUsers(subsRes.users || []);
+        if (subsRes.stats) setSubscriptionStats(subsRes.stats);
+      }
     } catch (err) {
       console.error("Admin load error:", err);
       showToast("Error synchronizing admin telemetry");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSubscriptionsData = async () => {
+    setIsLoadingSubscriptions(true);
+    try {
+      const res = await fetch("/api/admin/subscriptions");
+      const json = await res.json();
+      if (json.success) {
+        setSubscriptions(json.data || []);
+        setAdminUsers(json.users || []);
+        if (json.stats) setSubscriptionStats(json.stats);
+      }
+    } catch (e) {
+      console.error("Failed to load subscriptions", e);
+    } finally {
+      setIsLoadingSubscriptions(false);
+    }
+  };
+
+  const handleOpenEditSub = (sub: any) => {
+    setEditingSub(sub);
+    const userObj = sub.user || adminUsers.find((u) => u.id === sub.user_id) || null;
+    setSubForm({
+      email: sub.user_email || userObj?.email || "",
+      plan: sub.plan || "yearly",
+      amount: sub.amount || (sub.plan === "lifetime" ? "₹999" : "₹199"),
+      status: sub.status || "active",
+      credits: sub.user_credits ?? userObj?.credits ?? 25,
+      paymentId: sub.payment_id || "",
+      is_pro: sub.user_is_pro ?? userObj?.is_pro ?? (sub.status === "active"),
+    });
+  };
+
+  const handleOpenAddSubForUser = (userItem?: any) => {
+    setEditingSub(null);
+    setSubForm({
+      email: userItem?.email || "",
+      plan: "yearly",
+      amount: "₹199",
+      status: "active",
+      credits: 50,
+      paymentId: `admin_grant_${Date.now()}`,
+      is_pro: true,
+    });
+    setShowAddSubModal(true);
+  };
+
+  const handleSaveSubEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSub) return;
+    setSavingSub(true);
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingSub.id,
+          plan: subForm.plan,
+          amount: subForm.amount,
+          status: subForm.status,
+          credits: subForm.credits,
+          is_pro: subForm.is_pro,
+          payment_id: subForm.paymentId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Subscription updated successfully! ✨");
+        setEditingSub(null);
+        await loadSubscriptionsData();
+      } else {
+        showToast(data.error || "Failed to update subscription");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to update subscription");
+    } finally {
+      setSavingSub(false);
+    }
+  };
+
+  const handleCreateSub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subForm.email) {
+      showToast("User email is required");
+      return;
+    }
+    setSavingSub(true);
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: subForm.email,
+          plan: subForm.plan,
+          amount: subForm.amount,
+          status: subForm.status,
+          credits: subForm.credits,
+          paymentId: subForm.paymentId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`PRO subscription granted to ${subForm.email}! 🎉`);
+        setShowAddSubModal(false);
+        setSubForm({
+          email: "",
+          plan: "yearly",
+          amount: "₹199",
+          status: "active",
+          credits: 25,
+          paymentId: "",
+          is_pro: true,
+        });
+        await loadSubscriptionsData();
+      } else {
+        showToast(data.error || "Failed to grant subscription");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to grant subscription");
+    } finally {
+      setSavingSub(false);
+    }
+  };
+
+  const handleDeleteSub = async (subId: string) => {
+    if (!confirm("Are you sure you want to revoke and delete this subscription? The user's PRO privileges will be reverted if they have no other active plans.")) return;
+    try {
+      const res = await fetch(`/api/admin/subscriptions?id=${encodeURIComponent(subId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Subscription revoked successfully! 🗑️");
+        await loadSubscriptionsData();
+      } else {
+        showToast(data.error || "Failed to revoke subscription");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to revoke subscription");
     }
   };
 
@@ -3247,6 +3417,407 @@ export default function AdminPage() {
           )}
 
           {/* ========================================================================= */}
+          {/* TAB: SUBSCRIPTIONS & USER PLANS */}
+          {/* ========================================================================= */}
+          {activeTab === "subscriptions" && (() => {
+            const filteredSubs = subscriptions.filter((sub) => {
+              const query = subSearchQuery.toLowerCase().trim();
+              const userObj = sub.user || adminUsers.find((u) => u.id === sub.user_id) || null;
+              const email = (sub.user_email || userObj?.email || "").toLowerCase();
+              const name = (sub.user_name || userObj?.name || "").toLowerCase();
+              const payId = (sub.payment_id || "").toLowerCase();
+              const matchesSearch = !query || email.includes(query) || name.includes(query) || payId.includes(query);
+              const matchesPlan = subPlanFilter === "all" || (sub.plan || "").toLowerCase() === subPlanFilter.toLowerCase();
+              const matchesStatus = subStatusFilter === "all" || (sub.status || "").toLowerCase() === subStatusFilter.toLowerCase();
+              return matchesSearch && matchesPlan && matchesStatus;
+            });
+
+            return (
+              <div className="space-y-8 animate-in fade-in duration-300">
+                {/* Header Title & Actions */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                        Subscriptions &amp; User Plans
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                        LIVE SUPABASE SYNC
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Monitor live subscriber statuses, adjust user credits, modify plan tiers, and grant manual PRO access.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={loadSubscriptionsData}
+                      className="p-2.5 rounded-2xl bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors shadow-sm cursor-pointer"
+                      title="Refresh Subscriptions"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isLoadingSubscriptions ? "animate-spin" : ""}`} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddSubForUser()}
+                      className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Grant / Add Subscription</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4 Metric Bento Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Card 1: Revenue */}
+                  <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Total Revenue
+                      </span>
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-sm">
+                        ₹
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                        {subscriptionStats?.totalRevenue || stats?.totalRevenue || "₹0"}
+                      </div>
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        <span>Live payment settlements</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Active Subscriptions */}
+                  <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Active Subscriptions
+                      </span>
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                        {subscriptionStats?.activeSubscriptions ?? subscriptions.filter(s => s.status === "active").length}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Out of {subscriptions.length} registered subs
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Pro Users */}
+                  <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Active PRO Creators
+                      </span>
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                        <Crown className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl sm:text-3xl font-extrabold text-purple-600 dark:text-purple-400">
+                        {subscriptionStats?.proUsersCount ?? adminUsers.filter(u => u.is_pro).length}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Full access to all prompt flags
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Total Accounts */}
+                  <div className="p-5 rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Registered Accounts
+                      </span>
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center">
+                        <Users className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+                        {subscriptionStats?.totalUsers ?? adminUsers.length}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Creators, subscribers &amp; admins
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-sm">
+                  <div className="relative w-full sm:w-96">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search email, name, or payment ID..."
+                      value={subSearchQuery}
+                      onChange={(e) => setSubSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs sm:text-sm outline-none focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <select
+                      value={subPlanFilter}
+                      onChange={(e) => setSubPlanFilter(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Plans</option>
+                      <option value="yearly">Yearly (₹199)</option>
+                      <option value="lifetime">Lifetime (₹999)</option>
+                      <option value="free">Free Starter</option>
+                    </select>
+
+                    <select
+                      value={subStatusFilter}
+                      onChange={(e) => setSubStatusFilter(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="expired">Expired</option>
+                    </select>
+
+                    <span className="text-xs text-slate-500 whitespace-nowrap hidden sm:inline">
+                      {filteredSubs.length} found
+                    </span>
+                  </div>
+                </div>
+
+                {/* Subscriptions List / Table */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase font-mono tracking-wider text-slate-500 dark:text-slate-400">
+                      Active Subscription Records
+                    </h4>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Auto-synced with Supabase
+                    </span>
+                  </div>
+
+                  {filteredSubs.length === 0 ? (
+                    <div className="p-12 text-center rounded-3xl bg-white/80 dark:bg-white/[0.03] border border-dashed border-slate-200 dark:border-white/10 space-y-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto">
+                        <CreditCard className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">No matching subscriptions found</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                          You can grant a PRO subscription to any registered user directly using the button below.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddSubForUser()}
+                        className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all cursor-pointer"
+                      >
+                        Grant First Subscription
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/[0.03] shadow-sm">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] text-slate-500 dark:text-slate-400 font-mono uppercase text-[10px] tracking-wider">
+                            <th className="py-3.5 px-4 font-bold">User / Creator</th>
+                            <th className="py-3.5 px-4 font-bold">Plan Tier</th>
+                            <th className="py-3.5 px-4 font-bold">Billed Amount</th>
+                            <th className="py-3.5 px-4 font-bold">Status</th>
+                            <th className="py-3.5 px-4 font-bold">Credits</th>
+                            <th className="py-3.5 px-4 font-bold">Payment ID</th>
+                            <th className="py-3.5 px-4 font-bold">Date Created</th>
+                            <th className="py-3.5 px-4 font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05]">
+                          {filteredSubs.map((sub) => {
+                            const userObj = sub.user || adminUsers.find((u) => u.id === sub.user_id) || null;
+                            const email = sub.user_email || userObj?.email || "Unknown";
+                            const name = sub.user_name || userObj?.name || email.split("@")[0];
+                            const credits = sub.user_credits ?? userObj?.credits ?? 25;
+
+                            return (
+                              <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                                      {name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="truncate max-w-[180px]">
+                                      <div className="font-semibold text-slate-900 dark:text-white truncate">
+                                        {name}
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                        {email}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono border ${
+                                    sub.plan === "lifetime"
+                                      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                                      : sub.plan === "yearly"
+                                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                                      : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
+                                  }`}>
+                                    {sub.plan === "lifetime" ? <Crown className="w-3 h-3 text-purple-500" /> : <Sparkles className="w-3 h-3 text-amber-500" />}
+                                    <span>{sub.plan || "yearly"}</span>
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                                  {sub.amount || (sub.plan === "lifetime" ? "₹999" : "₹199")}
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono border ${
+                                    sub.status === "active"
+                                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                      : sub.status === "cancelled"
+                                      ? "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
+                                      : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      sub.status === "active" ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                                    }`} />
+                                    <span>{sub.status || "active"}</span>
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded-lg border border-indigo-500/10">
+                                    {credits} cr
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 truncate max-w-[120px]" title={sub.payment_id}>
+                                  {sub.payment_id || "admin_grant"}
+                                </td>
+
+                                <td className="py-3.5 px-4 text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                                  {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : "Recent"}
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditSub(sub)}
+                                      className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                                      title="Edit Subscription & Plan"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteSub(sub.id)}
+                                      className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                                      title="Revoke Subscription"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Registered Users & Quick PRO Grant Directory */}
+                <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        User Directory &amp; 1-Click PRO Grant
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        All registered user accounts in Supabase. You can immediately grant, upgrade, or modify privileges for any user.
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono text-slate-400">
+                      {adminUsers.length} Users
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {adminUsers.map((u) => {
+                      const userSub = subscriptions.find((s) => s.user_id === u.id);
+                      return (
+                        <div
+                          key={u.id}
+                          className="p-4 rounded-2xl bg-white/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 shadow-sm"
+                        >
+                          <div className="truncate min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {u.name || u.email?.split("@")[0]}
+                              </span>
+                              {u.is_pro ? (
+                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                                  PRO
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-500/10 text-slate-500 shrink-0">
+                                  FREE
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                              {u.email}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-1">
+                              Credits: <span className="font-bold text-slate-600 dark:text-slate-300">{u.credits ?? 5}</span> • Plan: {u.subscription_plan || "free"}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (userSub) {
+                                handleOpenEditSub(userSub);
+                              } else {
+                                handleOpenAddSubForUser(u);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 cursor-pointer transition-all ${
+                              u.is_pro
+                                ? "bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200 hover:bg-slate-200"
+                                : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm"
+                            }`}
+                          >
+                            {u.is_pro ? "Edit Plan" : "Grant PRO"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+
+          {/* ========================================================================= */}
           {/* TAB 6: PLATFORM CONTROLS (FEAT-036, FEAT-037, FEAT-038, FEAT-039) */}
           {/* ========================================================================= */}
           {activeTab === "settings" && (
@@ -4796,6 +5367,334 @@ export default function AdminPage() {
                   className="px-5 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md cursor-pointer"
                 >
                   {editingTool ? "Update Tool" : "Register"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT SUBSCRIPTION */}
+      {/* ========================================================================= */}
+      {editingSub && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/10 shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Edit Subscription &amp; User Access
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Modifying {editingSub.user_email || subForm.email}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingSub(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSubEdit} className="space-y-4">
+              {/* User Email & ID Info */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs space-y-1">
+                <div className="text-[11px] font-mono font-bold text-slate-400 uppercase">Target User</div>
+                <div className="font-semibold text-slate-900 dark:text-white flex items-center justify-between">
+                  <span>{subForm.email}</span>
+                  <span className="text-[10px] font-mono text-slate-400">ID: {editingSub.id}</span>
+                </div>
+              </div>
+
+              {/* Plan Tier Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Membership Tier
+                </label>
+                <select
+                  value={subForm.plan}
+                  onChange={(e) => {
+                    const newPlan = e.target.value;
+                    let newAmount = subForm.amount;
+                    if (newPlan === "lifetime") newAmount = "₹999";
+                    else if (newPlan === "yearly") newAmount = "₹199";
+                    else if (newPlan === "free") newAmount = "₹0";
+                    setSubForm({ ...subForm, plan: newPlan, amount: newAmount });
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="yearly">AWA Pro Creator (Yearly - ₹199)</option>
+                  <option value="lifetime">AWA Pro Lifetime Founder (₹999)</option>
+                  <option value="free">Free Starter Account (₹0)</option>
+                  <option value="custom">Custom Enterprise Tier</option>
+                </select>
+              </div>
+
+              {/* Amount and Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Billed Amount
+                  </label>
+                  <input
+                    type="text"
+                    value={subForm.amount}
+                    onChange={(e) => setSubForm({ ...subForm, amount: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500"
+                    placeholder="₹199"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Subscription Status
+                  </label>
+                  <select
+                    value={subForm.status}
+                    onChange={(e) => {
+                      const newStatus = e.target.value;
+                      setSubForm({
+                        ...subForm,
+                        status: newStatus,
+                        is_pro: newStatus === "active",
+                      });
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="active">Active (Granted Access)</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="expired">Expired / Lapsed</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pro Access Toggle & Credits */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">PRO Privileges</div>
+                    <div className="text-[10px] text-slate-500">Unlocks all blueprints</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(subForm.is_pro)}
+                    onChange={(e) => setSubForm({ ...subForm, is_pro: e.target.checked })}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Allocated Credits
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={subForm.credits}
+                    onChange={(e) => setSubForm({ ...subForm, credits: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Payment / Reference ID */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Payment Reference / Transaction ID
+                </label>
+                <input
+                  type="text"
+                  value={subForm.paymentId}
+                  onChange={(e) => setSubForm({ ...subForm, paymentId: e.target.value })}
+                  placeholder="e.g. pay_N239840293 or admin_grant"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingSub(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSub}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-500/25 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {savingSub ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save &amp; Sync to Supabase</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: GRANT / ADD SUBSCRIPTION */}
+      {/* ========================================================================= */}
+      {showAddSubModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/10 shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                  <Crown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Grant PRO Subscription
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Manually assign a paid membership to any user
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddSubModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSub} className="space-y-4">
+              {/* Select from existing users or enter custom email */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Select User Account
+                </label>
+                <select
+                  value={subForm.email}
+                  onChange={(e) => setSubForm({ ...subForm, email: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 cursor-pointer mb-2"
+                >
+                  <option value="">-- Choose existing user or type email below --</option>
+                  {adminUsers.map((u) => (
+                    <option key={u.id} value={u.email}>
+                      {u.name ? `${u.name} (${u.email})` : u.email} {u.is_pro ? "★ PRO" : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="email"
+                  placeholder="Or enter user email directly: user@example.com"
+                  value={subForm.email}
+                  onChange={(e) => setSubForm({ ...subForm, email: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Plan Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Target Plan Tier
+                </label>
+                <select
+                  value={subForm.plan}
+                  onChange={(e) => {
+                    const newPlan = e.target.value;
+                    const newAmount = newPlan === "lifetime" ? "₹999" : newPlan === "yearly" ? "₹199" : "₹0";
+                    setSubForm({ ...subForm, plan: newPlan, amount: newAmount });
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="yearly">AWA Pro Creator (Yearly - ₹199)</option>
+                  <option value="lifetime">AWA Pro Lifetime Founder (₹999)</option>
+                  <option value="custom">Custom Enterprise Tier</option>
+                </select>
+              </div>
+
+              {/* Amount and Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Plan Amount
+                  </label>
+                  <input
+                    type="text"
+                    value={subForm.amount}
+                    onChange={(e) => setSubForm({ ...subForm, amount: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500"
+                    placeholder="₹199"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Initial Credits
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={subForm.credits}
+                    onChange={(e) => setSubForm({ ...subForm, credits: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Payment / Grant Reference */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Payment / Reference Note
+                </label>
+                <input
+                  type="text"
+                  value={subForm.paymentId}
+                  onChange={(e) => setSubForm({ ...subForm, paymentId: e.target.value })}
+                  placeholder="e.g. bank_transfer_123 or admin_grant"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-medium outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSubModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSub}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-500/25 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {savingSub ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Granting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>Grant PRO Subscription</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
