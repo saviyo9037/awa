@@ -4,6 +4,7 @@ import { useState, useEffect, use, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ReactFlow,
@@ -53,17 +54,17 @@ const CustomWorkflowNode = ({ data }: any) => {
     <div
       className={`relative w-[280px] sm:w-[320px] rounded-2xl p-4 transition-all duration-300 ${
         active
-          ? "bg-[#111426]/95 border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.4)] ring-2 ring-blue-500/20"
+          ? "bg-blue-50 dark:bg-[#111426]/95 border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] ring-2 ring-blue-500/20 text-slate-900 dark:text-white"
           : completed
-          ? "bg-[#0c0d18]/90 border border-emerald-500/40 text-slate-300"
-          : "bg-[#0c0d18]/70 border border-white/10 text-slate-400 opacity-80 hover:opacity-100"
+          ? "bg-emerald-50/90 dark:bg-[#0c0d18]/90 border border-emerald-500/30 dark:border-emerald-500/40 text-slate-700 dark:text-slate-300 shadow-sm"
+          : "bg-white dark:bg-[#0c0d18]/70 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 shadow-sm opacity-90 hover:opacity-100"
       }`}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className={`!w-3 !h-3 !border-2 !border-[#07090e] transition-colors ${
-          active ? "!bg-blue-400" : completed ? "!bg-emerald-400" : "!bg-slate-700"
+        className={`!w-3 !h-3 !border-2 !border-white dark:!border-[#07090e] transition-colors ${
+          active ? "!bg-blue-500" : completed ? "!bg-emerald-500" : "!bg-slate-400 dark:!bg-slate-700"
         }`}
       />
 
@@ -74,22 +75,22 @@ const CustomWorkflowNode = ({ data }: any) => {
               active
                 ? "bg-blue-600 text-white shadow-md shadow-blue-500/40"
                 : completed
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                : "bg-white/5 text-slate-400 border border-white/10"
+                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40"
+                : "bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10"
             }`}
           >
             {completed ? <Check className="w-3 h-3" /> : String(step).padStart(2, "0")}
           </span>
           {phase && (
-            <span className="text-[9px] uppercase tracking-wider font-mono font-semibold text-slate-400 truncate max-w-[150px]">
+            <span className="text-[9px] uppercase tracking-wider font-mono font-semibold text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
               {phase}
             </span>
           )}
         </div>
 
         {active && (
-          <span className="flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+          <span className="flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
             ACTIVE
           </span>
         )}
@@ -97,21 +98,21 @@ const CustomWorkflowNode = ({ data }: any) => {
 
       <h4
         className={`text-xs font-bold leading-snug mb-1 transition-colors ${
-          active ? "text-white" : completed ? "text-slate-200" : "text-slate-300"
+          active ? "text-blue-900 dark:text-white" : completed ? "text-slate-800 dark:text-slate-200" : "text-slate-800 dark:text-slate-300"
         }`}
       >
         {title}
       </h4>
 
-      <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
         {description}
       </p>
 
       <Handle
         type="source"
         position={Position.Right}
-        className={`!w-3 !h-3 !border-2 !border-[#07090e] transition-colors ${
-          active ? "!bg-blue-400" : completed ? "!bg-emerald-400" : "!bg-slate-700"
+        className={`!w-3 !h-3 !border-2 !border-white dark:!border-[#07090e] transition-colors ${
+          active ? "!bg-blue-500" : completed ? "!bg-emerald-500" : "!bg-slate-400 dark:!bg-slate-700"
         }`}
       />
     </div>
@@ -123,6 +124,9 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
   const rawId = resolvedParams.id;
   const router = useRouter();
   const { user, isLoggedIn, isPro, isAdmin } = useAuth();
+  const { theme } = useTheme();
+  const isLight = theme === "light";
+
   const [liveTemplate, setLiveTemplate] = useState<any | null>(null);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);
@@ -248,26 +252,24 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
     } else if (lighting === "Golden Hour") {
       result += ", warm golden hour illumination, cinematic lens flare";
     } else if (lighting === "Studio Softbox") {
-      result += ", clean studio softbox lighting, high key minimalism";
+      result += ", ultra clean studio lighting, soft diffused shadow, crisp highlights";
     } else if (lighting === "Volumetric Neon") {
-      result += ", volumetric atmospheric fog, intense cyberpunk neon illumination";
-    }
-
-    if (customAddon.trim()) {
-      result += `, ${customAddon.trim()}`;
+      result += ", moody atmospheric haze, cinematic volumetric neon light shafts";
     }
 
     result += ` --ar ${aspectRatio}`;
-    if (stylize !== "0") result += ` --s ${stylize}`;
-    if (isRawStyle) result += ` --style raw`;
+    result += ` --s ${stylize}`;
+    if (isRawStyle) {
+      result += " --style raw";
+    }
 
     return result;
-  }, [serverPrompt, template?.prompt, isProBlueprint, isUnlocked, hasPrivilegedAccess, aspectRatio, lighting, stylize, isRawStyle, customAddon, customizedPrompt]);
+  }, [serverPrompt, template?.prompt, customizedPrompt, lighting, aspectRatio, stylize, isRawStyle, isProBlueprint, isUnlocked, hasPrivilegedAccess]);
 
   const handleCopy = () => {
     if (isProBlueprint && !isUnlocked && !hasPrivilegedAccess) {
       if (!isLoggedIn) {
-        router.push(`/login?redirect=${encodeURIComponent("/checkout?plan=yearly")}`);
+        router.push(`/login?redirect=${encodeURIComponent(`/template/${template.id}`)}`);
       } else {
         router.push("/checkout?plan=yearly");
       }
@@ -277,15 +279,13 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
     navigator.clipboard.writeText(dynamicPrompt);
     setCopied(true);
     setPromptCopied(true);
-    
+    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setPromptCopied(false), 2000);
+
+    // Track copy on backend
     if (template?.id) {
       fetch(`/api/templates/${template.id}/copy`, { method: "POST" }).catch(() => {});
     }
-
-    setTimeout(() => {
-      setCopied(false);
-      setPromptCopied(false);
-    }, 2200);
   };
 
   const handleShare = () => {
@@ -298,253 +298,130 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
 
   const handleMutatePrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isProBlueprint && !isUnlocked && !hasPrivilegedAccess) {
-      if (!isLoggedIn) {
-        router.push(`/login?redirect=${encodeURIComponent("/checkout?plan=yearly")}`);
-      } else {
-        router.push("/checkout?plan=yearly");
-      }
-      return;
-    }
     if (!customAddon.trim()) return;
-    setIsCustomizing(true);
 
+    setIsCustomizing(true);
     try {
       const res = await fetch("/api/prompts/mutate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          basePrompt: serverPrompt || template?.prompt || "",
-          tweak: customAddon.trim(),
+          basePrompt: template?.prompt || "",
+          tweak: customAddon,
           aspectRatio,
           stylize,
         }),
       });
-      const data = await res.json();
-      if (data.success && data.data?.customizedPrompt) {
-        setCustomizedPrompt(data.data.customizedPrompt);
-      } else {
-        setCustomizedPrompt(
-          `${serverPrompt || template?.prompt}, customized with ${customAddon.trim()}, 8k resolution, photorealistic cinematic finish --ar ${aspectRatio} --s ${stylize} --style raw`
-        );
+      const json = await res.json();
+      if (json.success && json.data?.customizedPrompt) {
+        setCustomizedPrompt(json.data.customizedPrompt);
       }
     } catch {
-      setCustomizedPrompt(
-        `${serverPrompt || template?.prompt}, customized with ${customAddon.trim()}, 8k resolution, photorealistic cinematic finish --ar ${aspectRatio} --s ${stylize} --style raw`
-      );
+      // Fallback local mutation
+      setCustomizedPrompt(`${template?.prompt || ""}, ${customAddon} --ar ${aspectRatio} --s ${stylize}`);
     } finally {
       setIsCustomizing(false);
+      setCustomAddon("");
     }
   };
 
-  // Gallery Thumbnails List (4 items matching the reference)
+  // Thumbnail list construction (4 items)
   const thumbnails = useMemo(() => {
     const baseImg = template?.img || "/placeholder.jpg";
     return [
-      { id: "thumb-1", src: baseImg, label: "Front Hero" },
+      { id: "thumb-1", src: baseImg, label: "Hero View" },
       { id: "thumb-2", src: template?.secondaryImg || "/cyber_portrait.jpg", label: "Angled Studio" },
       { id: "thumb-3", src: "/holographic_3d.jpg", label: "Macro Detail" },
       { id: "thumb-4", src: "/cyber_dashboard.jpg", label: "Atmosphere" },
     ];
-  }, [template?.img, template?.secondaryImg]);
+  }, [template]);
 
-  const activeMediaSrc = thumbnails[selectedThumbIndex]?.src || template?.img;
+  const activeMediaSrc = thumbnails[selectedThumbIndex]?.src || template?.img || "/placeholder.jpg";
 
-  // Guidance Stepper Workflow (7 Steps Matching the Reference UI)
+  // Guidance Interactive Stepper Data
   const [activeStepIndex, setActiveStepIndex] = useState(0);
-  const [isPlayingGuide, setIsPlayingGuide] = useState(false);
   const [referenceImgIndex, setReferenceImgIndex] = useState(0);
+  const [isPlayingGuide, setIsPlayingGuide] = useState(false);
 
-interface GuidanceStepDefinition {
-  id: number;
-  label: string;
-  stepNumber: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  examplePrompt: string;
-  referenceImages: string[];
-  referenceCaption: string;
-}
-
-  const guidanceSteps: GuidanceStepDefinition[] = useMemo(() => {
-    // If template has custom steps authored in admin (array of >= 3 items)
-    if (template?.steps && Array.isArray(template.steps) && template.steps.length >= 3) {
-      return template.steps.map((st: any, idx: number): GuidanceStepDefinition => ({
-        id: idx + 1,
-        label: st.phase || st.label || ["Concept", "Subject", "Composition", "Style", "Lighting", "Parameters", "Generate"][idx] || `Step 0${idx + 1}`,
-        stepNumber: String(idx + 1).padStart(2, "0"),
-        title: st.title || `Step ${idx + 1}`,
-        subtitle: st.subtitle || st.desc || st.instruction || "",
-        description: st.desc || st.instruction || st.description || "",
-        examplePrompt: st.examplePrompt || dynamicPrompt || "",
+  // Dynamic Stepper steps configured per category / blueprint
+  const guidanceSteps = useMemo(() => {
+    // If template has DB-driven usage steps, map them seamlessly
+    if (Array.isArray(template?.steps) && template.steps.length > 0) {
+      return template.steps.map((st: any, i: number) => ({
+        id: String(i + 1),
+        stepNumber: String(i + 1).padStart(2, "0"),
+        label: st.phase || (i === 0 ? "Subject" : i === 1 ? "Style" : i === 2 ? "Lighting" : i === 3 ? "Composition" : "Parameters"),
+        title: st.title || `Phase ${i + 1}`,
+        subtitle: st.subtitle || "Targeted aesthetic tuning",
+        description: st.desc || st.description || "Refine and calibrate this step for optimal synthesis.",
+        examplePrompt: st.examplePrompt || `${template.title} -- focus on ${st.title}`,
         referenceImages: [st.imgUrl, template?.img, "/cyber_dashboard.jpg"].filter(Boolean) as string[],
-        referenceCaption: st.tip || `Verified step 0${idx + 1} workflow`,
+        referenceCaption: st.referenceCaption || `${st.title} reference rendering`,
+        tip: st.tip || "Maintain consistent seed and aspect ratio across iterative variations.",
       }));
     }
 
-    const isWeb = template?.category?.toLowerCase().includes("web") || template?.tool?.toLowerCase().includes("claude");
-
-    if (isWeb) {
-      return [
-        {
-          id: 1,
-          label: "Concept",
-          stepNumber: "01",
-          title: "Define App Scope & Concept",
-          subtitle: "Start by deciding exactly what the web experience should deliver.",
-          description: "Clearly define the user purpose, core architectural components, and responsive hierarchy before writing code.",
-          examplePrompt: dynamicPrompt || "Build a responsive luxury product landing page with glassmorphic cards, smooth spring physics, and Tailwind CSS.",
-          referenceImages: [template?.img, "/cyber_dashboard.jpg", "/holographic_3d.jpg"].filter(Boolean),
-          referenceCaption: "Example of a clear concept with strong visual direction",
-        },
-        {
-          id: 2,
-          label: "Stack",
-          stepNumber: "02",
-          title: "Configure Tech Stack",
-          subtitle: "Set up the framework, UI primitives, and styling tokens.",
-          description: "Initialize Next.js 15 App Router with Tailwind CSS, Lucide icons, and Framer Motion for buttery smooth performance.",
-          examplePrompt: "Stack: Next.js 15 + Tailwind CSS + Lucide React + TypeScript strict mode.",
-          referenceImages: ["/cyber_dashboard.jpg", template?.img].filter(Boolean),
-          referenceCaption: "Modular scaffolding and responsive layout system",
-        },
-        {
-          id: 3,
-          label: "Composition",
-          stepNumber: "03",
-          title: "Establish Layout & Hierarchy",
-          subtitle: "Structure the visual flow and negative space.",
-          description: "Implement a balanced 2-column desktop grid with a sticky preview sidebar and dedicated interactive workflow controls.",
-          examplePrompt: "Two-column grid layout with sticky media preview and expandable parameter drawer.",
-          referenceImages: ["/holographic_3d.jpg", template?.img].filter(Boolean),
-          referenceCaption: "Clean visual balance with intuitive interaction points",
-        },
-        {
-          id: 4,
-          label: "Style",
-          stepNumber: "04",
-          title: "Select Color System & Aesthetics",
-          subtitle: "Define dark mode tokens and surface treatments.",
-          description: "Craft a luxurious obsidian atmosphere (#08090d) with subtle borders, glowing cyan accents, and high-contrast typography.",
-          examplePrompt: "Obsidian dark mode #08090d, subtle borders border-white/5, glowing cyan highlights, Outfit/Inter font.",
-          referenceImages: [template?.img, "/cyber_portrait.jpg"].filter(Boolean),
-          referenceCaption: "High-contrast dark mode surface styling",
-        },
-        {
-          id: 5,
-          label: "Lighting",
-          stepNumber: "05",
-          title: "Atmosphere & Micro-interactions",
-          subtitle: "Sculpt button hovers and ambient glow.",
-          description: "Add soft radial backdrops and responsive hover micro-interactions to make the interface feel alive.",
-          examplePrompt: "Ambient radial gradient glow, smooth hover lift transitions, and glowing ring focus states.",
-          referenceImages: ["/holographic_3d.jpg", "/cyber_dashboard.jpg"].filter(Boolean),
-          referenceCaption: "Dynamic ambient glow and interactive hover feedback",
-        },
-        {
-          id: 6,
-          label: "Parameters",
-          stepNumber: "06",
-          title: "Tune Component Parameters",
-          subtitle: "Fine-tune responsive breakpoints and transitions.",
-          description: "Optimize layout padding, spring animations, and accessible keyboard navigation across all screen sizes.",
-          examplePrompt: `Aspect ratio: ${aspectRatio} • Stylize: ${stylize} • Engine Mode: Raw`,
-          referenceImages: ["/cyber_dashboard.jpg", template?.img].filter(Boolean),
-          referenceCaption: "Engine configuration flags tuned for maximum fidelity",
-        },
-        {
-          id: 7,
-          label: "Generate",
-          stepNumber: "07",
-          title: "Synthesize & Ship Live",
-          subtitle: "Deploy the verified blueprint into production.",
-          description: "Run automated build checks, verify zero layout shifts, and deploy your live digital deliverable.",
-          examplePrompt: "Verify TypeScript compilation, test responsive breakpoints, and deploy to Vercel.",
-          referenceImages: [template?.img, "/workflow-mockup.jpg"].filter(Boolean),
-          referenceCaption: "Finished verified production build ready for deployment",
-        },
-      ];
-    }
-
-    // Default Image Generation steps matching the reference image 1:1
+    // Default High-Fidelity 5-Step Workflow
     return [
       {
-        id: 1,
-        label: "Concept",
+        id: "1",
         stepNumber: "01",
-        title: "Define the Concept",
-        subtitle: "Start by deciding exactly what the image should communicate.",
-        description: "Clearly define the main idea, purpose, and visual direction of the image. Think about what you want the final image to look and feel like.",
-        examplePrompt: dynamicPrompt || "A cinematic luxury product advertisement featuring a premium black smartphone in a dark futuristic studio environment with dramatic lighting and realistic reflections.",
-        referenceImages: [template?.img, "/cyber_portrait.jpg", "/holographic_3d.jpg"].filter(Boolean),
-        referenceCaption: "Example of a clear concept with strong visual direction",
-      },
-      {
-        id: 2,
         label: "Subject",
+        title: "Define Primary Subject & Core Concept",
+        subtitle: "Establish the visual anchor, key character, or product silhouette",
+        description: "Specify the exact entity with sharp physical definitions. Focus on material properties, surface reflections, textures, and hero silhouette before adding styling modifiers.",
+        examplePrompt: `${template?.title || "Modern product shot"}, matte black ceramic texture, minimalist contours, studio pedestal`,
+        referenceImages: [template?.img, "/cyber_dashboard.jpg", "/holographic_3d.jpg"].filter(Boolean),
+        referenceCaption: "Isolated subject structure and silhouette test",
+        tip: "Avoid vague adjectives like 'photorealistic'; specify the exact material, camera distance, and lens angle instead.",
+      },
+      {
+        id: "2",
         stepNumber: "02",
-        title: "Identify the Primary Subject",
-        subtitle: "Detail the central object, materials, and tactile surfaces.",
-        description: "Specify the exact physical properties, matte obsidian coatings, titanium chamfers, and precise placement of the hero subject.",
-        examplePrompt: "Hero subject: ultra-slim flagship phone, obsidian ceramic chassis, triple camera array with anti-reflective glass lenses, standing on reflective black pedestal.",
-        referenceImages: [template?.img, "/flower_reference.jpg", "/cyber_portrait.jpg"].filter(Boolean),
-        referenceCaption: "Crisp focal subject with intricate physical textures",
-      },
-      {
-        id: 3,
-        label: "Composition",
-        stepNumber: "03",
-        title: "Establish Composition & Framing",
-        subtitle: "Set camera angle, focal length, and spatial depth.",
-        description: "Position the camera at a dynamic three-quarter low angle with an 85mm prime lens to accentuate proportions and build cinematic scale.",
-        examplePrompt: "Shot on 85mm prime lens, dynamic low-angle isometric perspective, centered composition, shallow depth of field with subtle background bokeh.",
-        referenceImages: ["/holographic_3d.jpg", template?.img, "/cyber_dashboard.jpg"].filter(Boolean),
-        referenceCaption: "Precise cinematic framing with balanced negative space",
-      },
-      {
-        id: 4,
         label: "Style",
-        stepNumber: "04",
-        title: "Select Visual Style & Medium",
-        subtitle: "Direct rendering fidelity, realism, and aesthetic finish.",
-        description: "Choose commercial advertising photography realism with Octane render specular precision and ultra-clean high-contrast studio aesthetics.",
-        examplePrompt: "Commercial luxury advertising style, hyper-realistic studio photography, Octane 3D render precision, high aesthetic contrast, 8K UHD photorealism.",
-        referenceImages: ["/flower_night_street.jpg", template?.img, "/cyber_portrait.jpg"].filter(Boolean),
-        referenceCaption: "High-end commercial editorial aesthetic",
+        title: "Select Art Style & Rendering Engine",
+        subtitle: "Direct aesthetic direction, realism, grain, and color palette",
+        description: "Layer the art direction—whether hyper-clean commercial CGI, 35mm cinematic film grain, raw editorial photography, or liquid glassmorphism UI.",
+        examplePrompt: "Cinematic commercial photography, Hasselblad H6D-100c, 80mm f/2.8 lens, color graded in warm neutral tones",
+        referenceImages: ["/cyber_dashboard.jpg", template?.img].filter(Boolean),
+        referenceCaption: "Style calibration and medium simulation",
+        tip: "Using '--style raw' in Midjourney v6 reduces the AI's default bias and creates more authentic, less plastic images.",
       },
       {
-        id: 5,
+        id: "3",
+        stepNumber: "03",
         label: "Lighting",
+        title: "Calibrate Light Rays & Atmosphere",
+        subtitle: "Harness illumination, shadow depth, and ambient mood",
+        description: "Lighting dictates 80% of perceived visual luxury. Specify key lights, rim lights, volumetric fog, neon reflections, or natural diffused morning window spill.",
+        examplePrompt: "Dramatic studio rim lighting, dual-tone softbox illumination, subtle volumetric haze, high contrast deep shadows",
+        referenceImages: ["/holographic_3d.jpg", template?.img].filter(Boolean),
+        referenceCaption: "Volumetric light interaction and specular reflection test",
+        tip: "Soft directional rim lighting helps separate the subject from dark background planes, preventing muddy visuals.",
+      },
+      {
+        id: "4",
+        stepNumber: "04",
+        label: "Composition",
+        title: "Framing, Aspect Ratio & Camera Optics",
+        subtitle: "Rule of thirds, negative space, wide panoramic angles",
+        description: "Compose the final frame. Designate wide-angle perspective, dynamic diagonal lines, macro focal depth (f/1.8), or clean editorial negative space for typography overlay.",
+        examplePrompt: "Centered symmetrical framing, expansive negative space at top for typography, clean horizon line, 24mm wide angle",
+        referenceImages: [template?.img, "/cyber_portrait.jpg"].filter(Boolean),
+        referenceCaption: "Optics, framing, and negative space validation",
+        tip: "Ensure your target model supports the chosen aspect ratio natively to avoid distorted framing.",
+      },
+      {
+        id: "5",
         stepNumber: "05",
-        title: "Direct the Lighting & Atmosphere",
-        subtitle: "Sculpt the scene with key, fill, and volumetric rim lights.",
-        description: "Cast dramatic soft blue and cool white rim lights against deep obsidian shadows to highlight edge chamfers and create mirror-like pedestal reflections.",
-        examplePrompt: "Dramatic studio lighting, dual soft blue and cool white rim lights, dark futuristic studio atmosphere, clean specular highlights along metallic chamfers.",
-        referenceImages: ["/holographic_3d.jpg", template?.img, "/flower_snow_winter.jpg"].filter(Boolean),
-        referenceCaption: "Dramatic edge lighting and reflective chrome highlights",
-      },
-      {
-        id: 6,
         label: "Parameters",
-        stepNumber: "06",
-        title: "Tune Engine Parameters",
-        subtitle: "Set aspect ratio, stylize strength, and raw mode flags.",
-        description: `Configure command parameters for maximum fidelity: aspect ratio --ar ${aspectRatio}, stylize --s ${stylize}, and raw engine mode for photorealism.`,
-        examplePrompt: `--ar ${aspectRatio} --style raw --s ${stylize} --v 6.1`,
-        referenceImages: ["/cyber_dashboard.jpg", template?.img, "/cyber_portrait.jpg"].filter(Boolean),
-        referenceCaption: "Engine configuration flags tuned for maximum fidelity",
-      },
-      {
-        id: 7,
-        label: "Generate",
-        stepNumber: "07",
-        title: "Synthesize & Upscale",
-        subtitle: "Execute generation batch and upscale to 8K.",
-        description: "Run the finalized prompt directive in your AI tool. Inspect the 4-variation grid for anatomical and lighting fidelity, then upscale the best variation to 8K UHD.",
-        examplePrompt: "Execute prompt in Midjourney /imagine console, select variation, and upscale to 8K UHD finish.",
-        referenceImages: ["/flower_night_street.jpg", template?.img, "/holographic_3d.jpg"].filter(Boolean),
-        referenceCaption: "Finished 8K production render with pristine clarity",
+        title: "Tune Model Syntax & Execution Flags",
+        subtitle: "Aspect flags (--ar), stylize weights (--s), seeds, quality knobs",
+        description: "Append final execution parameters. Calibrate the stylize strength (--s 50 to --s 1000) depending on whether you want photographic literalism or creative flair.",
+        examplePrompt: `${dynamicPrompt}`,
+        referenceImages: ["/holographic_3d.jpg", "/cyber_dashboard.jpg"].filter(Boolean),
+        referenceCaption: "Final synthesis with calibrated parameters",
+        tip: "Save your favorite seeds (--seed <number>) to generate harmonious character or product continuity across a full sequence.",
       },
     ];
   }, [template, dynamicPrompt, aspectRatio, stylize]);
@@ -585,6 +462,8 @@ interface GuidanceStepDefinition {
     return guidanceSteps.slice(0, -1).map((s: any, index: number) => {
       const isPast = index < activeStepIndex;
       const isCurrent = index === activeStepIndex - 1;
+      const inactiveStroke = isLight ? "#94a3b8" : "#334155";
+      const inactiveArrow = isLight ? "#94a3b8" : "#475569";
 
       return {
         id: `e-step-${s.id}-step-${guidanceSteps[index + 1].id}`,
@@ -593,18 +472,18 @@ interface GuidanceStepDefinition {
         type: "smoothstep",
         animated: isCurrent || isPast,
         style: {
-          stroke: isPast ? "#10b981" : isCurrent ? "#3b82f6" : "#334155",
+          stroke: isPast ? "#10b981" : isCurrent ? "#3b82f6" : inactiveStroke,
           strokeWidth: isCurrent ? 3 : 2,
-          opacity: isPast || isCurrent ? 1 : 0.4,
+          opacity: isPast || isCurrent ? 1 : 0.5,
           transition: "all 0.4s ease",
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: isPast ? "#10b981" : isCurrent ? "#3b82f6" : "#475569",
+          color: isPast ? "#10b981" : isCurrent ? "#3b82f6" : inactiveArrow,
         },
       };
     });
-  }, [guidanceSteps, activeStepIndex]);
+  }, [guidanceSteps, activeStepIndex, isLight]);
 
   // Auto-play Guide Tour
   useEffect(() => {
@@ -641,15 +520,15 @@ interface GuidanceStepDefinition {
 
   if (isLoadingTemplate) {
     return (
-      <div className="min-h-screen bg-[#07090e] text-white pt-24 pb-24">
+      <div className="min-h-screen bg-slate-50 dark:bg-[#07090e] text-slate-900 dark:text-white pt-24 pb-24 transition-colors duration-300">
         <div className="max-w-[1450px] mx-auto px-4 sm:px-8 space-y-8 animate-pulse">
-          <div className="h-5 w-64 bg-white/10 rounded-full" />
+          <div className="h-5 w-64 bg-slate-200 dark:bg-white/10 rounded-full" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-7 aspect-[16/10] rounded-3xl bg-white/5 border border-white/10" />
+            <div className="lg:col-span-7 aspect-[16/10] rounded-3xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10" />
             <div className="lg:col-span-5 space-y-4">
-              <div className="h-8 w-3/4 bg-white/10 rounded-xl" />
-              <div className="h-28 bg-white/5 rounded-2xl" />
-              <div className="h-44 bg-white/5 rounded-2xl" />
+              <div className="h-8 w-3/4 bg-slate-200 dark:bg-white/10 rounded-xl" />
+              <div className="h-28 bg-slate-200 dark:bg-white/5 rounded-2xl" />
+              <div className="h-44 bg-slate-200 dark:bg-white/5 rounded-2xl" />
             </div>
           </div>
         </div>
@@ -659,17 +538,17 @@ interface GuidanceStepDefinition {
 
   if (isNotFound || !template) {
     return (
-      <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-4 bg-[#07090e] text-white">
-        <div className="w-16 h-16 rounded-3xl bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4 border border-blue-500/20 shadow-lg shadow-blue-500/10">
+      <div className="min-h-[75vh] flex flex-col items-center justify-center text-center px-4 bg-slate-50 dark:bg-[#07090e] text-slate-900 dark:text-white transition-colors duration-300">
+        <div className="w-16 h-16 rounded-3xl bg-blue-500/10 text-blue-500 dark:text-blue-400 flex items-center justify-center mb-4 border border-blue-500/20 shadow-lg shadow-blue-500/10">
           <Sparkles className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold mb-2">Blueprint Not Found</h2>
-        <p className="text-slate-400 max-w-md text-sm mb-6">
+        <h2 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">Blueprint Not Found</h2>
+        <p className="text-slate-600 dark:text-slate-400 max-w-md text-sm mb-6">
           The requested blueprint could not be found in the catalog.
         </p>
         <Link
           href="/"
-          className="px-6 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs transition-opacity hover:opacity-90"
+          className="px-6 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs transition-opacity hover:opacity-90 shadow-md"
         >
           Explore All Blueprints
         </Link>
@@ -678,7 +557,7 @@ interface GuidanceStepDefinition {
   }
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 transition-colors duration-300 pb-28 font-sans selection:bg-blue-500/30 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#07090e] text-slate-900 dark:text-slate-100 transition-colors duration-300 pb-12 sm:pb-16 font-sans selection:bg-blue-500/30 selection:text-white">
       
       {/* Master Admin Return Banner */}
       {isAdmin && (
@@ -699,23 +578,23 @@ interface GuidanceStepDefinition {
       {/* =========================================================================
           1. TOP BREADCRUMB & TOOLBAR (Matching Reference UI)
           ========================================================================= */}
-      <div className="border-b border-white/[0.06] bg-[#07090e]/80 backdrop-blur-xl sticky top-[64px] z-40">
+      <div className="border-b border-slate-200 dark:border-white/[0.06] bg-white/80 dark:bg-[#07090e]/80 backdrop-blur-xl sticky top-[64px] z-40 transition-colors duration-300">
         <div className="max-w-[1450px] mx-auto px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
           
           {/* Breadcrumbs: Library > Category > Title */}
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-            <Link href="/" className="hover:text-white transition-colors">
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <Link href="/" className="hover:text-slate-900 dark:hover:text-white transition-colors">
               Library
             </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600" />
             <Link
               href={`/?category=${encodeURIComponent(template.category)}`}
-              className="capitalize hover:text-white transition-colors"
+              className="capitalize hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               {template.category}
             </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-            <span className="text-white font-semibold truncate max-w-[200px] sm:max-w-md">
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600" />
+            <span className="text-slate-900 dark:text-white font-semibold truncate max-w-[200px] sm:max-w-md">
               {template.title}
             </span>
           </div>
@@ -723,27 +602,27 @@ interface GuidanceStepDefinition {
           {/* Right Toolbar: Model Pill Dropdown, Share, More Options */}
           <div className="flex items-center gap-2.5">
             {/* Model Pill */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-medium text-slate-200">
-              <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[10px] font-bold">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-200 shadow-sm">
+              <span className="w-4 h-4 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[10px] font-bold">
                 {template.tool?.[0] || "M"}
               </span>
               <span>{template.tool || "Midjourney"}</span>
-              <ChevronRight className="w-3 h-3 text-slate-500 rotate-90" />
+              <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500 rotate-90" />
             </div>
 
             {/* Share Button */}
             <button
               onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-sm"
             >
               {shareCopied ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">Copied!</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied!</span>
                 </>
               ) : (
                 <>
-                  <Share2 className="w-3.5 h-3.5 text-slate-400" />
+                  <Share2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                   <span>Share</span>
                 </>
               )}
@@ -752,7 +631,7 @@ interface GuidanceStepDefinition {
             {/* More Options Button */}
             <button
               onClick={() => setIsCustomizeOpen(true)}
-              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/10 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer shadow-sm"
               title="More options"
             >
               <MoreVertical className="w-4 h-4" />
@@ -781,10 +660,10 @@ interface GuidanceStepDefinition {
                   <button
                     key={thumb.id}
                     onClick={() => setSelectedThumbIndex(idx)}
-                    className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border transition-all cursor-pointer shrink-0 bg-[#0c0d16] ${
+                    className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border transition-all cursor-pointer shrink-0 bg-slate-100 dark:bg-[#0c0d16] ${
                       isSelected
                         ? "border-blue-500 ring-2 ring-blue-500/40 shadow-lg shadow-blue-500/25 scale-[1.02]"
-                        : "border-white/10 hover:border-white/30 opacity-70 hover:opacity-100"
+                        : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/30 opacity-70 hover:opacity-100"
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -800,7 +679,7 @@ interface GuidanceStepDefinition {
 
             {/* Main Large Image Card */}
             <div className="flex-1 w-full order-1 sm:order-2">
-              <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] rounded-3xl overflow-hidden border border-white/10 bg-[#0c0d16] shadow-2xl group flex items-center justify-center">
+              <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] rounded-3xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-[#0c0d16] shadow-xl dark:shadow-2xl group flex items-center justify-center">
                 {isVideo && selectedThumbIndex === 0 ? (
                   <video
                     src={template.videoUrl || template.img}
@@ -849,42 +728,42 @@ interface GuidanceStepDefinition {
             
             {/* Category Tag & Title Header */}
             <div>
-              <div className="flex items-center gap-2 mb-2 text-sky-400 font-mono font-bold text-xs uppercase tracking-wider">
-                <span className="w-4 h-4 flex items-center justify-center rounded bg-sky-400/10 text-sky-400">
+              <div className="flex items-center gap-2 mb-2 text-sky-600 dark:text-sky-400 font-mono font-bold text-xs uppercase tracking-wider">
+                <span className="w-4 h-4 flex items-center justify-center rounded bg-sky-500/10 text-sky-600 dark:text-sky-400">
                   ❖
                 </span>
                 <span>{template.subcategory || template.category || "IMAGE GENERATION"}</span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight mb-3">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight mb-3">
                 {template.title}
               </h1>
 
-              <p className="text-sm sm:text-base text-slate-400 leading-relaxed font-normal">
+              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
                 {template.desc || "Create a cinematic luxury product advertisement featuring a premium smartphone in a dark studio environment."}
               </p>
             </div>
 
             {/* Prompt Specification Card */}
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0c0e18] p-5 relative shadow-lg">
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.06]">
-                <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
-                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
+            <div className="rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#0c0e18] p-5 relative shadow-sm dark:shadow-lg">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-white/[0.06]">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <Terminal className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                   <span>PROMPT</span>
                 </div>
                 
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-xs font-medium cursor-pointer transition-colors border border-white/5"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white text-xs font-medium cursor-pointer transition-colors border border-slate-200 dark:border-white/5 shadow-sm"
                 >
                   {promptCopied ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400 font-semibold">Copied</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       <span>Copy</span>
                     </>
                   )}
@@ -893,7 +772,7 @@ interface GuidanceStepDefinition {
 
               {/* Monospace Prompt Content */}
               <div className="relative min-h-[90px] rounded-xl overflow-hidden">
-                <div className={`font-mono text-xs sm:text-[13px] leading-relaxed text-slate-300 whitespace-pre-wrap select-all ${
+                <div className={`font-mono text-xs sm:text-[13px] leading-relaxed text-slate-800 dark:text-slate-300 whitespace-pre-wrap select-all ${
                   isProBlueprint && !isUnlocked && !hasPrivilegedAccess ? "blur-md select-none opacity-30 pointer-events-none" : ""
                 }`}>
                   {isProBlueprint && !isUnlocked && !hasPrivilegedAccess
@@ -904,7 +783,7 @@ interface GuidanceStepDefinition {
 
                 {/* Locked Paywall Overlay */}
                 {isProBlueprint && !isUnlocked && !hasPrivilegedAccess && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-black/70 backdrop-blur-sm text-center z-10 rounded-xl">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-slate-900/80 dark:bg-black/70 backdrop-blur-sm text-center z-10 rounded-xl">
                     <div className="w-10 h-10 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center mb-2">
                       <Lock className="w-5 h-5" />
                     </div>
@@ -934,9 +813,9 @@ interface GuidanceStepDefinition {
               {/* Secondary CTA: Customize */}
               <button
                 onClick={() => setIsCustomizeOpen(true)}
-                className="py-3.5 px-5 rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] text-white border border-white/10 font-medium text-sm transition-all flex items-center gap-2 cursor-pointer"
+                className="py-3.5 px-5 rounded-2xl bg-white hover:bg-slate-100 dark:bg-white/[0.05] dark:hover:bg-white/[0.09] text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-medium text-sm transition-all flex items-center gap-2 cursor-pointer shadow-sm dark:shadow-none"
               >
-                <Edit3 className="w-4 h-4 text-slate-300" />
+                <Edit3 className="w-4 h-4 text-slate-500 dark:text-slate-300" />
                 <span>Customize</span>
               </button>
 
@@ -945,8 +824,8 @@ interface GuidanceStepDefinition {
                 onClick={() => setIsBookmarked(!isBookmarked)}
                 className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                   isBookmarked
-                    ? "bg-blue-600/20 border-blue-500 text-blue-400 shadow-md shadow-blue-500/20"
-                    : "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-400 hover:text-white"
+                    ? "bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-600/20 dark:border-blue-500 dark:text-blue-400 shadow-md shadow-blue-500/20"
+                    : "bg-white hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-800 dark:bg-white/[0.05] dark:hover:bg-white/[0.09] dark:border-white/10 dark:text-slate-400 dark:hover:text-white shadow-sm dark:shadow-none"
                 }`}
                 title={isBookmarked ? "Remove Bookmark" : "Save Bookmark"}
               >
@@ -956,33 +835,33 @@ interface GuidanceStepDefinition {
 
             {/* Metadata Stats Row (3 Items Matching Reference) */}
             <div className="grid grid-cols-3 gap-3 pt-2">
-              <div className="p-3 rounded-2xl bg-[#0c0e18] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center text-slate-300 shrink-0">
+              <div className="p-3 rounded-2xl bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/[0.06] flex items-center gap-3 shadow-sm dark:shadow-none">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/5 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
                   <Monitor className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block truncate">{aspectRatio}</span>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono block">Aspect Ratio</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">{aspectRatio}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono block">Aspect Ratio</span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-[#0c0e18] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center text-slate-300 shrink-0">
+              <div className="p-3 rounded-2xl bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/[0.06] flex items-center gap-3 shadow-sm dark:shadow-none">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/5 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
                   <Compass className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block truncate capitalize">{template.category}</span>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono block">Category</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate capitalize">{template.category}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono block">Category</span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-[#0c0e18] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+              <div className="p-3 rounded-2xl bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/[0.06] flex items-center gap-3 shadow-sm dark:shadow-none">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
                   <Cpu className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block truncate">{template.tool || "Midjourney"}</span>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono block">AI Tool</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">{template.tool || "Midjourney"}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono block">AI Tool</span>
                 </div>
               </div>
             </div>
@@ -993,29 +872,29 @@ interface GuidanceStepDefinition {
         {/* =========================================================================
             3. "GUIDANCE" SECTION: INTERACTIVE STEPPER & NODE GRAPH CANVAS
             ========================================================================= */}
-        <div className="rounded-3xl border border-white/[0.06] bg-[#0b0d14] p-6 sm:p-9 shadow-2xl mb-16">
+        <div className="rounded-3xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#0b0d14] p-6 sm:p-9 shadow-xl dark:shadow-2xl mb-16 transition-colors duration-300">
           
           {/* Header: Title + Subtitle & Mode Switcher + Play Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/[0.06]">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.06]">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                 Guidance
               </h2>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Build the perfect result step by step
               </p>
             </div>
 
             <div className="flex items-center gap-2.5">
               {/* Guidance View Mode Toggle: Step Guide vs Node Graph */}
-              <div className="flex items-center bg-white/[0.04] p-1 rounded-xl border border-white/10 text-xs">
+              <div className="flex items-center bg-slate-100 dark:bg-white/[0.04] p-1 rounded-xl border border-slate-200 dark:border-white/10 text-xs shadow-inner">
                 <button
                   type="button"
                   onClick={() => setGuidanceViewMode("steps")}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                     guidanceViewMode === "steps"
                       ? "bg-blue-600 text-white shadow-md shadow-blue-500/25"
-                      : "text-slate-400 hover:text-white"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -1027,7 +906,7 @@ interface GuidanceStepDefinition {
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                     guidanceViewMode === "node"
                       ? "bg-blue-600 text-white shadow-md shadow-blue-500/25"
-                      : "text-slate-400 hover:text-white"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <Layers className="w-3.5 h-3.5" />
@@ -1039,9 +918,9 @@ interface GuidanceStepDefinition {
               <button
                 type="button"
                 onClick={() => setIsPlayingGuide(!isPlayingGuide)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-700 hover:text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 text-xs font-semibold transition-all cursor-pointer shadow-sm"
               >
-                {isPlayingGuide ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current text-blue-400" />}
+                {isPlayingGuide ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current text-blue-600 dark:text-blue-400" />}
                 <span>{isPlayingGuide ? "Pause" : "Play"}</span>
               </button>
             </div>
@@ -1056,7 +935,7 @@ interface GuidanceStepDefinition {
               <div className="py-6 overflow-x-auto scrollbar-none">
                 <div className="flex items-center min-w-[650px] justify-between relative px-2">
                   {/* Stepper Connecting Background Line */}
-                  <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-[1px] bg-white/10 -z-0" />
+                  <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-[1px] bg-slate-200 dark:bg-white/10 -z-0" />
 
                   {guidanceSteps.map((stepItem: any, idx: number) => {
                     const isActive = idx === activeStepIndex;
@@ -1070,7 +949,7 @@ interface GuidanceStepDefinition {
                           setIsPlayingGuide(false);
                           setReferenceImgIndex(0);
                         }}
-                        className="flex items-center gap-2 z-10 px-2 py-1 rounded-full cursor-pointer transition-all bg-[#0b0d14]"
+                        className="flex items-center gap-2 z-10 px-2 py-1 rounded-full cursor-pointer transition-all bg-white dark:bg-[#0b0d14]"
                       >
                         <span
                           className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
@@ -1078,14 +957,14 @@ interface GuidanceStepDefinition {
                               ? "bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-lg shadow-blue-500/30 scale-105"
                               : isPast
                               ? "bg-emerald-600 text-white"
-                              : "bg-[#131624] text-slate-400 border border-white/10 hover:border-white/30"
+                              : "bg-slate-100 dark:bg-[#131624] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/30"
                           }`}
                         >
                           {isPast ? "✓" : stepItem.stepNumber}
                         </span>
                         <span
                           className={`text-xs font-medium ${
-                            isActive ? "text-blue-400 font-semibold" : "text-slate-400"
+                            isActive ? "text-blue-600 dark:text-blue-400 font-semibold" : "text-slate-500 dark:text-slate-400"
                           }`}
                         >
                           {stepItem.label}
@@ -1109,34 +988,34 @@ interface GuidanceStepDefinition {
                   {/* Left Column: Vertical Step & Description */}
                   <div className="lg:col-span-7 space-y-4">
                     <div className="flex items-start gap-4">
-                      <div className="border-r border-white/10 pr-4 shrink-0">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block">
+                      <div className="border-r border-slate-200 dark:border-white/10 pr-4 shrink-0">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
                           STEP
                         </span>
-                        <span className="text-3xl sm:text-4xl font-extrabold text-white block">
+                        <span className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white block">
                           {activeStep.stepNumber}
                         </span>
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight mb-1">
+                        <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
                           {activeStep.title}
                         </h3>
-                        <p className="text-xs sm:text-sm text-slate-400 font-medium leading-relaxed">
+                        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
                           {activeStep.subtitle}
                         </p>
                       </div>
                     </div>
 
-                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal pt-1">
+                    <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-normal pt-1">
                       {activeStep.description}
                     </p>
 
                     {/* Example Prompt Box */}
-                    <div className="rounded-2xl bg-[#07080e] border border-white/[0.06] p-4 relative">
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.04]">
-                        <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400">
-                          <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                    <div className="rounded-2xl bg-slate-50 dark:bg-[#07080e] border border-slate-200 dark:border-white/[0.06] p-4 relative shadow-inner">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-white/[0.04]">
+                        <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                          <Terminal className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                           <span>Example Prompt</span>
                         </div>
 
@@ -1146,14 +1025,14 @@ interface GuidanceStepDefinition {
                             setCopied(true);
                             setTimeout(() => setCopied(false), 2000);
                           }}
-                          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
                         >
                           <Copy className="w-3.5 h-3.5" />
                           <span>Copy</span>
                         </button>
                       </div>
 
-                      <p className="font-mono text-xs text-slate-300 leading-relaxed select-all">
+                      <p className="font-mono text-xs text-slate-800 dark:text-slate-300 leading-relaxed select-all">
                         {activeStep.examplePrompt}
                       </p>
                     </div>
@@ -1161,7 +1040,7 @@ interface GuidanceStepDefinition {
 
                   {/* Right Column: Reference Example Image Preview */}
                   <div className="lg:col-span-5">
-                    <div className="relative rounded-2xl overflow-hidden aspect-[16/10] bg-black/60 border border-white/10 shadow-xl group">
+                    <div className="relative rounded-2xl overflow-hidden aspect-[16/10] bg-slate-100 dark:bg-black/60 border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-xl group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={activeRefImage}
@@ -1184,10 +1063,10 @@ interface GuidanceStepDefinition {
                     {/* Reference Example Caption */}
                     <div className="flex items-center justify-between pt-3 px-1 text-xs">
                       <div>
-                        <span className="font-semibold text-white block">Reference Example</span>
-                        <span className="text-[11px] text-slate-400 block">{activeStep.referenceCaption}</span>
+                        <span className="font-semibold text-slate-900 dark:text-white block">Reference Example</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">{activeStep.referenceCaption}</span>
                       </div>
-                      <span className="font-mono text-slate-500 font-semibold shrink-0">
+                      <span className="font-mono text-slate-400 dark:text-slate-500 font-semibold shrink-0">
                         {((referenceImgIndex % refImages.length) + 1)} / {refImages.length}
                       </span>
                     </div>
@@ -1196,7 +1075,7 @@ interface GuidanceStepDefinition {
               </AnimatePresence>
 
               {/* Stepper Navigation Bottom Bar */}
-              <div className="pt-6 border-t border-white/[0.06] flex items-center justify-between gap-4">
+              <div className="pt-6 border-t border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-4">
                 <button
                   onClick={() => {
                     setActiveStepIndex((prev) => Math.max(0, prev - 1));
@@ -1206,8 +1085,8 @@ interface GuidanceStepDefinition {
                   disabled={activeStepIndex === 0}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
                     activeStepIndex === 0
-                      ? "opacity-30 cursor-not-allowed border-white/5 text-slate-500"
-                      : "border-white/10 text-slate-300 hover:bg-white/[0.05] cursor-pointer"
+                      ? "opacity-30 cursor-not-allowed border-slate-200 dark:border-white/5 text-slate-400 dark:text-slate-500"
+                      : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] cursor-pointer shadow-sm"
                   }`}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1216,13 +1095,13 @@ interface GuidanceStepDefinition {
 
                 {/* Middle Progress Track */}
                 <div className="flex items-center gap-3">
-                  <div className="hidden sm:block w-32 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="hidden sm:block w-32 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                     <div
                       className="h-full bg-blue-500 rounded-full transition-all duration-300"
                       style={{ width: `${((activeStepIndex + 1) / guidanceSteps.length) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs font-mono text-slate-400 font-semibold">
+                  <span className="text-xs font-mono text-slate-500 dark:text-slate-400 font-semibold">
                     Step {activeStep.stepNumber} / 0{guidanceSteps.length}
                   </span>
                 </div>
@@ -1260,7 +1139,7 @@ interface GuidanceStepDefinition {
                 VIEW 2: ANIMATED REACT FLOW NODE CANVAS
                 =================================================================== */
             <div className="pt-4">
-              <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-[#07080e] border border-white/10 shadow-2xl">
+              <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-[#07080e] border border-slate-200 dark:border-white/10 shadow-lg dark:shadow-2xl">
                 <ReactFlow
                   nodes={flowNodes}
                   edges={flowEdges}
@@ -1280,12 +1159,12 @@ interface GuidanceStepDefinition {
                   }}
                   className="touch-pan-y"
                 >
-                  <Background color="rgba(255,255,255,0.06)" gap={24} size={1} />
-                  <Controls className="!bg-[#0c0d18] !border-white/10 !fill-white" />
+                  <Background color={isLight ? "rgba(100, 116, 139, 0.2)" : "rgba(255,255,255,0.06)"} gap={24} size={1} />
+                  <Controls className="!bg-white dark:!bg-[#0c0d18] !border-slate-200 dark:!border-white/10 !fill-slate-700 dark:!fill-white !shadow-md" />
                 </ReactFlow>
 
-                <div className="absolute bottom-4 left-4 z-10 px-3.5 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 text-xs font-mono text-slate-300 flex items-center gap-2">
-                  <Compass className="w-3.5 h-3.5 text-blue-400" />
+                <div className="absolute bottom-4 left-4 z-10 px-3.5 py-1.5 rounded-xl bg-white/90 dark:bg-black/75 backdrop-blur-md border border-slate-200 dark:border-white/10 text-xs font-mono text-slate-700 dark:text-slate-300 flex items-center gap-2 shadow-sm">
+                  <Compass className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                   <span>Interactive Node Canvas • Click any node to select • Drag nodes to reposition</span>
                 </div>
               </div>
@@ -1300,17 +1179,17 @@ interface GuidanceStepDefinition {
         <div className="pt-4">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                 More from this category
               </h2>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Explore more {template.category || "image generation"} templates
               </p>
             </div>
             
             <Link
               href={`/?category=${encodeURIComponent(template.category)}`}
-              className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+              className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 flex items-center gap-1.5 transition-colors"
             >
               <span>View All</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1323,9 +1202,9 @@ interface GuidanceStepDefinition {
               <Link
                 href={`/template/${item.id}`}
                 key={item.id}
-                className="group flex flex-col rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0c0e18] shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                className="group flex flex-col rounded-2xl overflow-hidden border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#0c0e18] shadow-sm hover:shadow-xl dark:shadow-md dark:hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-900">
+                <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-900">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.img}
@@ -1340,12 +1219,12 @@ interface GuidanceStepDefinition {
                 </div>
 
                 <div className="p-3.5 flex-1 flex flex-col justify-between">
-                  <h3 className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-1 mb-2">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1 mb-2">
                     {item.title}
                   </h3>
 
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="px-2 py-0.5 rounded-md bg-white/[0.04] text-slate-400 font-mono capitalize truncate max-w-[100px]">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 font-mono capitalize truncate max-w-[100px]">
                       {item.category}
                     </span>
                     <button
@@ -1353,7 +1232,7 @@ interface GuidanceStepDefinition {
                       onClick={(e) => {
                         e.preventDefault();
                       }}
-                      className="text-slate-500 hover:text-white transition-colors"
+                      className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-white transition-colors"
                     >
                       <Bookmark className="w-3.5 h-3.5" />
                     </button>
@@ -1378,7 +1257,7 @@ interface GuidanceStepDefinition {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCustomizeOpen(false)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm"
             />
 
             {/* Slide-over Drawer Panel */}
@@ -1387,17 +1266,17 @@ interface GuidanceStepDefinition {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative w-full max-w-md bg-[#0c0e18] border-l border-white/10 h-full p-6 sm:p-8 overflow-y-auto flex flex-col justify-between shadow-2xl z-10"
+              className="relative w-full max-w-md bg-white dark:bg-[#0c0e18] border-l border-slate-200 dark:border-white/10 h-full p-6 sm:p-8 overflow-y-auto flex flex-col justify-between shadow-2xl z-10 text-slate-900 dark:text-white"
             >
               <div className="space-y-6">
-                <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10">
                   <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="w-5 h-5 text-blue-400" />
-                    <h3 className="text-lg font-bold text-white">Prompt Customizer</h3>
+                    <SlidersHorizontal className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Prompt Customizer</h3>
                   </div>
                   <button
                     onClick={() => setIsCustomizeOpen(false)}
-                    className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                    className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1405,7 +1284,7 @@ interface GuidanceStepDefinition {
 
                 {/* Aspect Ratio */}
                 <div>
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-2">
                     Aspect Ratio (--ar)
                   </label>
                   <div className="grid grid-cols-4 gap-2">
@@ -1416,7 +1295,7 @@ interface GuidanceStepDefinition {
                         className={`py-2 rounded-xl text-xs font-mono font-semibold transition-all cursor-pointer border ${
                           aspectRatio === ar
                             ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
-                            : "bg-white/[0.03] text-slate-400 border-white/10 hover:border-white/20"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-white/[0.03] dark:text-slate-400 dark:border-white/10 dark:hover:border-white/20"
                         }`}
                       >
                         {ar}
@@ -1427,24 +1306,24 @@ interface GuidanceStepDefinition {
 
                 {/* Lighting Atmosphere */}
                 <div>
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-2">
                     Lighting Atmosphere
                   </label>
                   <select
                     value={lighting}
                     onChange={(e) => setLighting(e.target.value)}
-                    className="w-full py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-mono text-white outline-none focus:border-blue-500"
+                    className="w-full py-2.5 px-3 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs font-mono text-slate-900 dark:text-white outline-none focus:border-blue-500"
                   >
-                    <option value="Cyber Obsidian" className="bg-[#0c0e18]">Cyber Obsidian (Default)</option>
-                    <option value="Golden Hour" className="bg-[#0c0e18]">Warm Golden Hour</option>
-                    <option value="Studio Softbox" className="bg-[#0c0e18]">Minimal Studio Softbox</option>
-                    <option value="Volumetric Neon" className="bg-[#0c0e18]">Volumetric Fog & Neon</option>
+                    <option value="Cyber Obsidian" className="bg-white dark:bg-[#0c0e18] text-slate-900 dark:text-white">Cyber Obsidian (Default)</option>
+                    <option value="Golden Hour" className="bg-white dark:bg-[#0c0e18] text-slate-900 dark:text-white">Warm Golden Hour</option>
+                    <option value="Studio Softbox" className="bg-white dark:bg-[#0c0e18] text-slate-900 dark:text-white">Minimal Studio Softbox</option>
+                    <option value="Volumetric Neon" className="bg-white dark:bg-[#0c0e18] text-slate-900 dark:text-white">Volumetric Fog & Neon</option>
                   </select>
                 </div>
 
                 {/* Stylize Parameter */}
                 <div>
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-2">
                     Stylize Strength (--s)
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -1455,7 +1334,7 @@ interface GuidanceStepDefinition {
                         className={`py-2 rounded-xl text-xs font-mono font-semibold transition-all cursor-pointer border ${
                           stylize === s
                             ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
-                            : "bg-white/[0.03] text-slate-400 border-white/10"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-white/[0.03] dark:text-slate-400 dark:border-white/10"
                         }`}
                       >
                         --s {s}
@@ -1466,15 +1345,15 @@ interface GuidanceStepDefinition {
 
                 {/* Engine Mode */}
                 <div>
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-2">
                     Engine Mode
                   </label>
                   <button
                     onClick={() => setIsRawStyle(!isRawStyle)}
                     className={`w-full py-2.5 px-4 rounded-xl text-xs font-mono font-semibold transition-all cursor-pointer border flex items-center justify-between ${
                       isRawStyle
-                        ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
-                        : "bg-white/[0.03] border-white/10 text-slate-400"
+                        ? "bg-blue-50 border-blue-300 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-400"
+                        : "bg-slate-100 border-slate-200 text-slate-700 dark:bg-white/[0.03] dark:border-white/10 dark:text-slate-400"
                     }`}
                   >
                     <span>--style raw</span>
@@ -1484,7 +1363,7 @@ interface GuidanceStepDefinition {
 
                 {/* Inject Custom Directive */}
                 <div>
-                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-2">
                     Inject Custom Tweak Directives
                   </label>
                   <form onSubmit={handleMutatePrompt} className="space-y-2">
@@ -1493,7 +1372,7 @@ interface GuidanceStepDefinition {
                       value={customAddon}
                       onChange={(e) => setCustomAddon(e.target.value)}
                       placeholder="E.g. Sapphire metallic reflections..."
-                      className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white outline-none focus:border-blue-500"
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:border-blue-500"
                     />
                     <button
                       type="submit"
@@ -1507,7 +1386,7 @@ interface GuidanceStepDefinition {
               </div>
 
               {/* Bottom Actions */}
-              <div className="pt-6 border-t border-white/10">
+              <div className="pt-6 border-t border-slate-200 dark:border-white/10">
                 <button
                   onClick={() => {
                     handleCopy();

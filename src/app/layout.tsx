@@ -107,13 +107,13 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${outfit.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${fraunces.variable} ${ibmPlexMono.variable} antialiased min-h-screen flex flex-col justify-between bg-page-bg text-page-text transition-colors duration-300`}
+        className={`${outfit.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${fraunces.variable} ${ibmPlexMono.variable} antialiased min-h-screen flex flex-col bg-page-bg text-page-text transition-colors duration-300`}
       >
         <ThemeProvider>
           <AuthProvider>
-            <div>
+            <div className="flex-1 flex flex-col">
               <Header />
-              {children}
+              <main className="flex-1">{children}</main>
             </div>
             <Footer />
             <ThemeToggle />
