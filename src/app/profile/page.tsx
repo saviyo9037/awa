@@ -88,14 +88,14 @@ export default function ProfileScreen() {
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-[40px] text-slate-900 dark:text-slate-100 transition-colors duration-300" style={{ animation: 'fadeInUp 0.5s ease-out' }}>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Creator Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Creator Account</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Connected to Live Supabase Cloud Database
+            Manage your subscription, credits, and bookmarked blueprints.
           </p>
         </div>
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>DB Online: Cloud Synced</span>
+          <span>Account Active</span>
         </div>
       </div>
       
@@ -141,12 +141,12 @@ export default function ProfileScreen() {
             </div>
           </div>
 
-          {/* Database Metrics Widget */}
-          {stats && (
+          {/* Admin Database Metrics Widget (Only for admins) */}
+          {isAdmin && stats && (
             <div className="bg-white dark:bg-[#100f18] border border-slate-200 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <Database className="w-3.5 h-3.5 text-cyan-500" />
-                <span>Catalog DB Metrics</span>
+                <span>Admin DB Overview</span>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04]">

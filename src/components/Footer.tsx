@@ -69,8 +69,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/admin" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline transition-colors">
-                  Admin Console
+                <Link href="/contact" className="text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-cyan-300 transition-colors">
+                  Contact &amp; Support
                 </Link>
               </li>
             </ul>

@@ -558,22 +558,6 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#07090e] text-slate-900 dark:text-slate-100 transition-colors duration-300 pb-12 sm:pb-16 font-sans selection:bg-blue-500/30 selection:text-white">
-      
-      {/* Master Admin Return Banner */}
-      {isAdmin && (
-        <div className="bg-emerald-950/90 border-b border-emerald-500/30 px-4 py-2 text-xs flex items-center justify-between text-emerald-200 sticky top-0 z-50 backdrop-blur-md">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Master Admin Mode • Viewing Live User Template Page</span>
-          </div>
-          <Link
-            href="/admin"
-            className="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition-colors shadow-sm text-[11px]"
-          >
-            <span>← Return to Admin Console</span>
-          </Link>
-        </div>
-      )}
 
       {/* =========================================================================
           1. TOP BREADCRUMB & TOOLBAR (Matching Reference UI)

@@ -114,17 +114,6 @@ export default function Header() {
               )}
             </button>
 
-            {/* Admin Console Shortcut if admin */}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin Console</span>
-              </Link>
-            )}
-
             {/* User Profile or Sign In */}
             {isLoggedIn ? (
               <Link
@@ -157,18 +146,6 @@ export default function Header() {
                   Register
                 </Link>
               </div>
-            )}
-
-            {/* Admin Console Quick Link if Admin */}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                title="Admin Console"
-                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[11px] font-semibold transition-all"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin</span>
-              </Link>
             )}
 
             {/* CTA Button */}
