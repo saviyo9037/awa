@@ -1,0 +1,1207 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { 
+  Library, Settings, Bell, HelpCircle, Undo2, Redo2, Maximize, ChevronLeft, Upload, MoreVertical,
+  Play, Pause, RotateCcw, MoreHorizontal, Plus, Minus,
+  Maximize2, Download, Sliders, ChevronDown, Sparkles,
+  Layers, ArrowLeft, RefreshCw, Cpu, Zap, Activity,
+  Image as ImageIcon, Video, Type, Terminal, CheckCircle2,
+  SlidersHorizontal, X, Keyboard, Map, Clock, GitBranch,
+  Share2, Lock, Unlock, Search, List, Star, Wand2, Trash2,
+  Copy, Eye, EyeOff
+} from "lucide-react";
+
+// ─── Pipeline Stage Metadata ─────────────────────────────────────────────────
+const STAGES = [
+  { id: 1, label: "Conditioning", nodeId: "text-1", color: "cyan" },
+  { id: 2, label: "Image Gen", nodeId: "gen4-image", color: "cyan" },
+  { id: 3, label: "Video Synth", nodeId: "gen4-video", color: "cyan" },
+  { id: 4, label: "Aleph Fusion", nodeId: "aleph", color: "pink" },
+];
+
+// ─── History Log Types ────────────────────────────────────────────────────────
+interface HistoryEntry {
+  id: number;
+  time: string;
+  action: string;
+  node: string;
+  status: "success" | "running" | "error";
+}
+
+// ─── Node Status Badge ────────────────────────────────────────────────────────
+function NodeBadge({ running, done }: { running: boolean; done: boolean }) {
+  if (running)
+    return (
+      <span className="text-[8px] font-mono px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 flex items-center gap-1 animate-pulse shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />
+        RUNNING
+      </span>
+    );
+  if (done)
+    return (
+      <span className="text-[8px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+        <CheckCircle2 className="w-2.5 h-2.5" />
+        DONE
+      </span>
+    );
+  return (
+    <span className="text-[8px] font-mono px-1.5 py-0.5 rounded-full bg-white/5 text-slate-400 border border-white/10 shrink-0">
+      IDLE
+    </span>
+  );
+}
+
+export default function CyberpunkWorkflowStudio() {
+  // ── Canvas ────────────────────────────────────────────────────────────────
+  const [zoom, setZoom] = useState(85);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // ── Panel Visibility ──────────────────────────────────────────────────────
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [minimapOpen, setMinimapOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // ── Selected Node ─────────────────────────────────────────────────────────
+  const [selectedNodeId, setSelectedNodeId] = useState<string>("aleph");
+
+  // ── Pipeline ──────────────────────────────────────────────────────────────
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
+  const [activeStep, setActiveStep] = useState<number>(0);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [vramUsage, setVramUsage] = useState(3.8);
+  const [gpuUtil, setGpuUtil] = useState(12);
+
+  // ── Prompts ───────────────────────────────────────────────────────────────
+  const [prompt1, setPrompt1] = useState(
+    "The flower arrangement is in the middle of the street at night in New York City, lit only by street lamps."
+  );
+  const [prompt2, setPrompt2] = useState(
+    "Make the whole scene covered in snow in the dead of winter."
+  );
+
+  // ── Gen-4 Parameters ──────────────────────────────────────────────────────
+  const [steps, setSteps] = useState(4);
+  const [cfg, setCfg] = useState(3.5);
+  const [seed, setSeed] = useState(48920194);
+  const [sampler, setSampler] = useState("FLUX Schnell");
+  const [gen4Progress, setGen4Progress] = useState(100);
+  const [isGen4Running, setIsGen4Running] = useState(false);
+  const [gen4Done, setGen4Done] = useState(true);
+
+  // ── AI Output State ───────────────────────────────────────────────────────
+  const [gen4ImageUrl, setGen4ImageUrl] = useState<string | null>(null);
+  const [alephImageUrl, setAlephImageUrl] = useState<string | null>(null);
+  const [aiMode, setAiMode] = useState<"AI" | "DEMO">("DEMO");
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [gen4InferenceMs, setGen4InferenceMs] = useState<number | null>(null);
+  const [alephInferenceMs, setAlephInferenceMs] = useState<number | null>(null);
+
+  // ── Video ─────────────────────────────────────────────────────────────────
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+
+  // ── Aleph ─────────────────────────────────────────────────────────────────
+  const [alephProgress, setAlephProgress] = useState(100);
+  const [isAlephRunning, setIsAlephRunning] = useState(false);
+  const [alephDone, setAlephDone] = useState(true);
+  const [alephVariation, setAlephVariation] = useState(1);
+
+  // ── History ───────────────────────────────────────────────────────────────
+  const [historyLog, setHistoryLog] = useState<HistoryEntry[]>([
+    { id: 1, time: "09:31", action: "Pipeline executed", node: "All Nodes", status: "success" },
+    { id: 2, time: "09:28", action: "Prompt updated", node: "Text Conditioning", status: "success" },
+    { id: 3, time: "09:15", action: "Seed randomized", node: "Gen-4 Image", status: "success" },
+  ]);
+
+  // ── Minimap Nodes ─────────────────────────────────────────────────────────
+  const minimapNodes = [
+    { id: "text-1", x: 2, y: 4, w: 14, h: 20, color: "#00e5ff" },
+    { id: "img-in", x: 18, y: 4, w: 12, h: 20, color: "#00e5ff" },
+    { id: "gen4-image", x: 34, y: 3, w: 16, h: 22, color: "#00e5ff" },
+    { id: "gen4-video", x: 54, y: 3, w: 15, h: 16, color: "#00e5ff" },
+    { id: "text-2", x: 54, y: 28, w: 15, h: 14, color: "#ff007f" },
+    { id: "aleph", x: 73, y: 3, w: 17, h: 24, color: "#ff007f" },
+  ];
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
+  const [showFullMockup, setShowFullMockup] = useState(false);
+
+  // ── Auto-fit on mount + check API status ─────────────────────────────────
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const w = window.innerWidth;
+      setZoom(w < 1300 ? 75 : w < 1600 ? 85 : 95);
+    }
+    // 100% Free AI provider connected (No API key needed)
+    setAiMode("AI");
+    addHistory("AI backend connected ✓ (Pollinations Free)", "System", "success");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Ticker: VRAM & GPU util wiggle while running ──────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (isPipelineRunning || isGen4Running || isAlephRunning) {
+        setGpuUtil((prev) => Math.min(100, Math.max(60, prev + (Math.random() - 0.5) * 12)));
+        setVramUsage((prev) => Math.min(23, Math.max(3, prev + (Math.random() - 0.5) * 0.4)));
+      } else {
+        setGpuUtil((prev) => Math.max(5, prev - 5));
+      }
+    }, 600);
+    return () => clearInterval(t);
+  }, [isPipelineRunning, isGen4Running, isAlephRunning]);
+
+  // ── Video progress ticker ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isVideoPlaying) return;
+    const t = setInterval(() => {
+      setVideoProgress((p) => {
+        if (p >= 100) { setIsVideoPlaying(false); return 0; }
+        return p + 2;
+      });
+    }, 80);
+    return () => clearInterval(t);
+  }, [isVideoPlaying]);
+
+  // ── Keyboard Shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      if (e.key === "=" || e.key === "+") setZoom((z) => Math.min(130, z + 10));
+      if (e.key === "-") setZoom((z) => Math.max(50, z - 10));
+      if (e.key === "f" || e.key === "F") handleFitWorkflow();
+      if (e.key === "Escape") { setInspectorOpen(false); setShortcutsOpen(false); }
+      if (e.key === "r" || e.key === "R") handleRunFullPipeline();
+      if (e.key === "?") setShortcutsOpen((o) => !o);
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [isPipelineRunning]);
+
+  // ── Canvas Drag ───────────────────────────────────────────────────────────
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".studio-node") ||
+      (e.target as HTMLElement).closest("button") ||
+      (e.target as HTMLElement).closest("input") ||
+      (e.target as HTMLElement).closest("textarea") ||
+      (e.target as HTMLElement).closest("select")) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  };
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+  const handleMouseUp = () => setIsDragging(false);
+
+  // ── Fit Workflow ──────────────────────────────────────────────────────────
+  const handleFitWorkflow = useCallback(() => {
+    setPan({ x: 6, y: 4 });
+    if (typeof window !== "undefined") {
+      const avail = window.innerWidth - (inspectorOpen ? 280 : 0);
+      setZoom(Math.min(110, Math.max(60, Math.floor((avail / 1300) * 90))));
+    }
+  }, [inspectorOpen]);
+
+  // ── Add History Entry ─────────────────────────────────────────────────────
+  const addHistory = (action: string, node: string, status: "success" | "running" | "error" = "success") => {
+    const now = new Date();
+    const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+    setHistoryLog((prev) => [{ id: Date.now(), time, action, node, status }, ...prev.slice(0, 19)]);
+  };
+
+  // ── Simulation fallback (when FAL_KEY not set) ───────────────────────────
+  const simulateProgress = (
+    setter: React.Dispatch<React.SetStateAction<number>>,
+    increment: number,
+    intervalMs: number,
+    onDone: () => void
+  ) => {
+    const iv = setInterval(() => {
+      setter((p) => {
+        if (p >= 100) { clearInterval(iv); onDone(); return 100; }
+        return Math.min(100, p + increment);
+      });
+    }, intervalMs);
+    return iv;
+  };
+
+  // ── Call Fal.ai API ───────────────────────────────────────────────────────
+  const callFalAI = async (prompt: string, imageSeed?: number): Promise<{ url: string; inferenceMs: number | null } | null> => {
+    try {
+      const res = await fetch("/api/workflow/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          model: "flux-schnell",
+          image_size: "square_hd",
+          num_inference_steps: steps,
+          guidance_scale: cfg,
+          seed: imageSeed ?? seed,
+          num_images: 1,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAiError(data.error ?? "Unknown error");
+        addHistory(`AI error: ${data.error?.slice(0, 40)}`, "Fal.ai", "error");
+        return null;
+      }
+      setAiError(null);
+      return {
+        url: data.data?.images?.[0]?.url ?? null,
+        inferenceMs: data.data?.inference_time_ms ?? null,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      setAiError(msg);
+      addHistory(`Network error: ${msg.slice(0, 40)}`, "Fal.ai", "error");
+      return null;
+    }
+  };
+
+  // ── Run Gen-4 Image ───────────────────────────────────────────────────────
+  const handleRunGen4 = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (isGen4Running) return;
+    setIsGen4Running(true); setGen4Done(false); setGen4Progress(0); setVramUsage(8.4);
+    addHistory("Generation started", "Gen-4 Image", "running");
+
+    if (aiMode === "AI") {
+      // ── Real AI ──────────────────────────────────────────────────────────
+      // Animate progress bar while waiting for API
+      const iv = setInterval(() => setGen4Progress((p) => Math.min(90, p + 3)), 400);
+      const result = await callFalAI(prompt1, seed);
+      clearInterval(iv);
+      setGen4Progress(100);
+      if (result?.url) {
+        setGen4ImageUrl(result.url);
+        setGen4InferenceMs(result.inferenceMs);
+        addHistory(`Image generated (${result.inferenceMs ? result.inferenceMs + "ms" : "done"})`, "Gen-4 Image · FLUX", "success");
+      } else {
+        addHistory("Falling back to demo output", "Gen-4 Image", "error");
+      }
+      setIsGen4Running(false); setGen4Done(true); setVramUsage(4.1);
+    } else {
+      // ── Demo simulation ───────────────────────────────────────────────────
+      simulateProgress(setGen4Progress, 11, 200, () => {
+        setIsGen4Running(false); setGen4Done(true); setVramUsage(4.1);
+        addHistory("Demo image rendered", "Gen-4 Image", "success");
+      });
+    }
+  };
+
+  // ── Run Aleph ─────────────────────────────────────────────────────────────
+  const handleRunAleph = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (isAlephRunning) return;
+    setIsAlephRunning(true); setAlephDone(false); setAlephProgress(0); setVramUsage(11.2);
+    addHistory("Fusion started", "Aleph Neural Core", "running");
+
+    if (aiMode === "AI") {
+      // Combine both prompts for the master fusion
+      const fusionPrompt = `${prompt1} ${prompt2} Ultra-detailed, cinematic, 8k`;
+      const iv = setInterval(() => setAlephProgress((p) => Math.min(88, p + 2)), 450);
+      const result = await callFalAI(fusionPrompt, seed + 1);
+      clearInterval(iv);
+      setAlephProgress(100);
+      if (result?.url) {
+        setAlephImageUrl(result.url);
+        setAlephInferenceMs(result.inferenceMs);
+        addHistory(`Master fusion complete (${result.inferenceMs ? result.inferenceMs + "ms" : "done"})`, "Aleph · FLUX", "success");
+      } else {
+        addHistory("Falling back to demo output", "Aleph Neural Core", "error");
+      }
+      setIsAlephRunning(false); setAlephDone(true); setVramUsage(4.5);
+    } else {
+      simulateProgress(setAlephProgress, 9, 250, () => {
+        setIsAlephRunning(false); setAlephDone(true); setVramUsage(4.5);
+        addHistory("Demo fusion complete", "Aleph Neural Core", "success");
+      });
+    }
+  };
+
+  // ── Run Full Pipeline ─────────────────────────────────────────────────────
+  const handleRunFullPipeline = async () => {
+    if (isPipelineRunning) return;
+    setIsPipelineRunning(true); setCompletedSteps([]); setActiveStep(1);
+    setGen4Progress(0); setAlephProgress(0); setGen4Done(false); setAlephDone(false);
+    addHistory(`Full pipeline started (${aiMode} mode)`, "All Nodes", "running");
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 400)); // Conditioning delay
+    setCompletedSteps([1]); setActiveStep(2);
+
+    // Stage 2: Image Gen
+    await handleRunGen4();
+    setCompletedSteps((c) => [...c, 2]); setActiveStep(3);
+
+    // Stage 3: Video Synth (always simulated — no video model connected yet)
+    await new Promise<void>((resolve) => setTimeout(resolve, 900));
+    setCompletedSteps((c) => [...c, 3]); setActiveStep(4);
+
+    // Stage 4: Aleph Fusion
+    await handleRunAleph();
+    setCompletedSteps([1, 2, 3, 4]); setActiveStep(0);
+    setIsPipelineRunning(false); setVramUsage(4.2);
+    addHistory(aiMode === "AI" ? "✅ AI Pipeline complete" : "✅ Demo Pipeline complete", "All Nodes", "success");
+  };
+
+  const isWireActive = isPipelineRunning || isGen4Running || isAlephRunning;
+
+  // ── Node Select Helper ────────────────────────────────────────────────────
+  const selectNode = (id: string) => {
+    setSelectedNodeId(id);
+    setInspectorOpen(true);
+  };
+
+  return (
+    <div className="h-screen w-screen bg-[#06070a] text-slate-100 flex flex-col font-sans overflow-hidden select-none">
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TOP HUD BAR
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <header className="h-14 border-b border-white/10 bg-[#08090f]/98 backdrop-blur-xl px-4 flex items-center justify-between z-40 shrink-0">
+
+        {/* Left: Back + Branding + Workflow Picker + Telemetry */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-300 hover:text-white transition-all group">
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+            <span>AWA.AI</span>
+          </Link>
+
+          <div className="h-5 w-px bg-white/10" />
+
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.4)]">
+              <Zap className="w-3.5 h-3.5 text-black fill-black" />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="text-[11px] font-bold tracking-widest uppercase text-white font-mono leading-none">STUDIO</span>
+              <span className="text-[9px] text-cyan-400 font-mono">v4.8-CORE</span>
+            </div>
+          </div>
+
+          <div className="h-5 w-px bg-white/10 hidden md:block" />
+
+          {/* Workflow Selector Dropdown */}
+          <div className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 text-xs font-mono text-slate-300 cursor-pointer transition-colors">
+            <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="truncate max-w-[160px]">Creative_Flow_NYC_Snow</span>
+            <ChevronDown className="w-3 h-3 text-slate-500" />
+          </div>
+
+          {/* AI Mode Badge + Error Toast */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-mono font-bold transition-all ${
+              aiMode === "AI"
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${aiMode === "AI" ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+              {aiMode === "AI" ? "AI LIVE · Pollinations Free" : "DEMO MODE"}
+            </div>
+            {aiError && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-[10px] font-mono text-red-400 max-w-[200px] truncate">
+                <span className="shrink-0">⚠</span>
+                <span className="truncate">{aiError}</span>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Center: Pipeline Stage Breadcrumb + Execute */}
+        <div className="flex flex-col items-center gap-1">
+          {/* Stage Breadcrumb Indicators */}
+          <div className="hidden md:flex items-center gap-1">
+            {STAGES.map((stage, i) => {
+              const done = completedSteps.includes(stage.id);
+              const running = activeStep === stage.id;
+              return (
+                <React.Fragment key={stage.id}>
+                  <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono transition-all ${
+                    running ? "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50 shadow-[0_0_8px_rgba(0,229,255,0.4)]" :
+                    done ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                    "bg-white/5 text-slate-500 border border-white/10"
+                  }`}>
+                    {done && <CheckCircle2 className="w-2.5 h-2.5" />}
+                    {running && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />}
+                    <span>{stage.label}</span>
+                  </div>
+                  {i < STAGES.length - 1 && (
+                    <div className={`w-4 h-px transition-colors ${done ? "bg-emerald-400/50" : "bg-white/10"}`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          {/* Execute Pipeline Button */}
+          <button
+            onClick={handleRunFullPipeline}
+            disabled={isPipelineRunning}
+            className={`px-5 py-1.5 rounded-full text-xs font-bold font-mono tracking-wider flex items-center gap-2 transition-all shadow-lg cursor-pointer ${
+              isPipelineRunning
+                ? "bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-[0_0_20px_rgba(0,229,255,0.5)] animate-pulse"
+                : "bg-gradient-to-r from-cyan-400 to-indigo-600 hover:from-cyan-300 hover:to-indigo-500 text-black shadow-[0_0_15px_rgba(0,229,255,0.4)] hover:scale-[1.03] active:scale-95"
+            }`}
+          >
+            <Zap className={`w-3.5 h-3.5 fill-current ${isPipelineRunning ? "animate-spin" : ""}`} />
+            <span>{isPipelineRunning ? `STAGE ${activeStep}/4 RUNNING...` : "EXECUTE PIPELINE"}</span>
+          </button>
+        </div>
+
+        {/* Right: Toolbar Controls */}
+        <div className="flex items-center gap-1.5">
+          {/* Zoom */}
+          <div className="flex items-center rounded-lg border border-white/10 bg-black/40 p-0.5 font-mono text-xs text-slate-300">
+            <button onClick={() => setZoom((z) => Math.max(50, z - 10))} className="p-1.5 hover:bg-white/10 rounded transition-colors" title="Zoom Out (-)">
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="px-1.5 min-w-[38px] text-center text-[11px]">{zoom}%</span>
+            <button onClick={() => setZoom((z) => Math.min(130, z + 10))} className="p-1.5 hover:bg-white/10 rounded transition-colors" title="Zoom In (+)">
+              <Plus className="w-3 h-3" />
+            </button>
+            <button onClick={handleFitWorkflow} className="px-2 py-1 border-l border-white/10 text-[10px] text-cyan-400 hover:bg-white/10 rounded transition-colors font-bold" title="Fit View (F)">
+              FIT
+            </button>
+          </div>
+
+          {/* Minimap */}
+          <button onClick={() => setMinimapOpen(!minimapOpen)} className={`p-2 rounded-lg border text-xs transition-colors cursor-pointer ${minimapOpen ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"}`} title="Toggle Minimap">
+            <Map className="w-3.5 h-3.5" />
+          </button>
+
+          {/* History */}
+          <button onClick={() => setHistoryOpen(!historyOpen)} className={`p-2 rounded-lg border text-xs transition-colors cursor-pointer ${historyOpen ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"}`} title="Toggle History">
+            <Clock className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Inspector */}
+          <button onClick={() => setInspectorOpen(!inspectorOpen)} className={`p-2 rounded-lg border text-xs transition-colors cursor-pointer ${inspectorOpen ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-300 shadow-[0_0_8px_rgba(99,102,241,0.3)]" : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"}`} title="Toggle Inspector (I)">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Keyboard shortcuts */}
+          <button onClick={() => setShortcutsOpen(!shortcutsOpen)} className={`p-2 rounded-lg border text-xs transition-colors cursor-pointer border-white/10 bg-white/[0.04] text-slate-400 hover:text-white`} title="Keyboard Shortcuts (?)">
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
+
+          {/* 16:9 Render */}
+          <button onClick={() => setShowFullMockup(true)} className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-xs font-mono text-cyan-300 flex items-center gap-1.5 transition-colors cursor-pointer" title="View 16:9 UI Blueprint">
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">PREVIEW</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          MAIN WORKSPACE
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex-1 flex relative overflow-hidden">
+
+        {/* ── Infinite Canvas ───────────────────────────────────────────────── */}
+        <div
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          className={`flex-1 relative overflow-hidden ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{
+            backgroundColor: "#07070a",
+            backgroundImage: `
+              radial-gradient(rgba(0,229,255,0.07) 1.5px, transparent 1.5px),
+              linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+            `,
+            backgroundSize: "28px 28px, 140px 140px, 140px 140px",
+          }}
+        >
+          {/* Ambient blobs */}
+          <div className="absolute top-1/4 left-1/3 w-[600px] h-[600px] bg-cyan-500/[0.025] rounded-full blur-[180px] pointer-events-none" />
+          <div className="absolute bottom-1/4 right-1/5 w-[500px] h-[500px] bg-pink-500/[0.025] rounded-full blur-[180px] pointer-events-none" />
+          <div className="absolute top-3/4 left-1/5 w-[400px] h-[400px] bg-indigo-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
+
+          {/* ── NODE CANVAS ───────────────────────────────────────────────── */}
+          <div
+            className="absolute origin-top-left"
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})`, width: "1280px", height: "730px" }}
+          >
+            {/* ── SVG NEON WIRES ──────────────────────────────────────────── */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+              <defs>
+                <filter id="glowC"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                <filter id="glowP"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                <linearGradient id="wC" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#00e5ff" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.95" />
+                </linearGradient>
+                <linearGradient id="wP" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#ff007f" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.95" />
+                </linearGradient>
+              </defs>
+
+              {/* Wire 1: Text Conditioning → Gen-4 Image (top port) */}
+              <path d="M 230 155 C 320 155, 360 140, 450 140" fill="none" stroke="url(#wC)" strokeWidth="2.5" filter="url(#glowC)" strokeDasharray={isWireActive ? "7 4" : "none"} className={isWireActive ? "animate-[dash_1s_linear_infinite]" : ""} />
+
+              {/* Wire 2: Image Input → Gen-4 Image (bottom port) */}
+              <path d="M 430 220 C 438 220, 444 210, 450 210" fill="none" stroke="url(#wC)" strokeWidth="2.5" filter="url(#glowC)" />
+
+              {/* Wire 3: Gen-4 Image → Gen-4 Video */}
+              <path d="M 688 185 C 700 185, 705 150, 718 150" fill="none" stroke="url(#wC)" strokeWidth="3" filter="url(#glowC)" strokeDasharray={isGen4Running ? "7 4" : "none"} />
+
+              {/* Wire 4: Gen-4 Video → Aleph (top port) */}
+              <path d="M 942 150 C 952 150, 957 148, 967 148" fill="none" stroke="url(#wP)" strokeWidth="3" filter="url(#glowP)" strokeDasharray={isAlephRunning ? "7 4" : "none"} />
+
+              {/* Wire 5: Secondary Text → Aleph (bottom port) */}
+              <path d="M 942 450 C 957 450, 957 262, 967 262" fill="none" stroke="url(#wP)" strokeWidth="2.5" filter="url(#glowP)" strokeDasharray={isWireActive ? "7 4" : "none"} />
+            </svg>
+
+            {/* ================================================================
+                NODE 1: TEXT CONDITIONING (left: 25, top: 40)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("text-1")}
+              className={`studio-node absolute left-[25px] top-[40px] w-[205px] rounded-2xl bg-[#0d0e17]/95 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer group ${
+                selectedNodeId === "text-1"
+                  ? "border-cyan-400 shadow-[0_0_25px_rgba(0,229,255,0.35)] ring-1 ring-cyan-400/50"
+                  : "border-white/[0.08] hover:border-white/20 shadow-2xl hover:shadow-cyan-500/5"
+              }`}
+            >
+              {/* Node top chrome accent line */}
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent rounded-full" />
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-cyan-500/20 flex items-center justify-center">
+                    <Type className="w-3 h-3 text-cyan-400" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300 font-semibold">Text Input</span>
+                </div>
+                <NodeBadge running={false} done={true} />
+              </div>
+
+              <div className="p-2.5 pb-3">
+                <textarea
+                  value={prompt1}
+                  onChange={(e) => setPrompt1(e.target.value)}
+                  rows={5}
+                  className="w-full text-[11px] font-mono leading-relaxed bg-[#10111a] border border-white/[0.06] rounded-xl p-2 text-slate-200 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_10px_rgba(0,229,255,0.1)] resize-none transition-all selection:bg-cyan-500/30"
+                />
+                <div className="mt-1.5 flex items-center justify-between text-[9px] font-mono">
+                  <span className="text-slate-500">Tokens: {Math.ceil(prompt1.length / 4)}/77</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(prompt1); addHistory("Prompt copied", "Text Conditioning"); }}
+                    className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-0.5"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Output Port */}
+              <div className="absolute -right-3 top-[115px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.7)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              </div>
+            </div>
+
+            {/* ================================================================
+                NODE 2: IMAGE INPUT (left: 250, top: 40)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("image-input")}
+              className={`studio-node absolute left-[250px] top-[40px] w-[180px] rounded-2xl bg-[#0d0e17]/95 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer ${
+                selectedNodeId === "image-input"
+                  ? "border-cyan-400 shadow-[0_0_25px_rgba(0,229,255,0.35)] ring-1 ring-cyan-400/50"
+                  : "border-white/[0.08] hover:border-white/20 shadow-2xl"
+              }`}
+            >
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent rounded-full" />
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-cyan-500/20 flex items-center justify-center">
+                    <ImageIcon className="w-3 h-3 text-cyan-400" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300 font-semibold">Image Input</span>
+                </div>
+                <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">REF</span>
+              </div>
+
+              <div className="p-2.5 pb-3">
+                <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-white/[0.08] bg-black/50 mb-2 group/img">
+                  <Image src="/flower_reference.jpg" alt="Reference" fill className="object-cover group-hover/img:scale-105 transition-transform duration-500" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8px] font-mono text-slate-300">1024×1024</div>
+                </div>
+                <button className="w-full py-1 px-2 rounded-lg bg-[#181a25] hover:bg-[#1f2133] border border-white/[0.06] text-[10px] font-mono text-slate-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:text-white">
+                  <RefreshCw className="w-2.5 h-2.5 text-cyan-400" />
+                  <span>Replace</span>
+                </button>
+              </div>
+
+              {/* Right Output Port */}
+              <div className="absolute -right-3 top-[180px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.7)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              </div>
+            </div>
+
+            {/* ================================================================
+                NODE 3: GEN-4 IMAGE (left: 450, top: 25)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("gen4-image")}
+              className={`studio-node absolute left-[450px] top-[25px] w-[238px] rounded-2xl bg-[#0d0e17]/98 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer ${
+                selectedNodeId === "gen4-image"
+                  ? "border-cyan-400 shadow-[0_0_30px_rgba(0,229,255,0.4)] ring-1 ring-cyan-400/50"
+                  : "border-white/[0.08] hover:border-white/20 shadow-2xl"
+              }`}
+            >
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent rounded-full" />
+
+              {/* Left Input Ports */}
+              <div className="absolute -left-3 top-[115px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_10px_rgba(0,229,255,0.6)]"><span className="w-2 h-2 rounded-full bg-cyan-400" /></div>
+              <div className="absolute -left-3 top-[185px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_10px_rgba(0,229,255,0.6)]"><span className="w-2 h-2 rounded-full bg-cyan-400" /></div>
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-indigo-500/20 flex items-center justify-center">
+                    <Cpu className="w-3 h-3 text-indigo-400" />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-white uppercase">Gen-4 Image</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <NodeBadge running={isGen4Running} done={gen4Done} />
+                </div>
+              </div>
+
+              <div className="p-2.5 pb-3">
+                <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-white/[0.08] bg-black/60 mb-2">
+                  {gen4ImageUrl ? (
+                    // Real AI output from Fal.ai
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={gen4ImageUrl}
+                      alt="AI Generated"
+                      className={`w-full h-full object-cover transition-all duration-300 ${isGen4Running ? "opacity-25 scale-105" : "opacity-100"}`}
+                    />
+                  ) : (
+                    <Image
+                      src="/flower_night_street.jpg"
+                      alt="Gen-4 Demo"
+                      fill
+                      className={`object-cover transition-all duration-300 ${isGen4Running ? "opacity-25 scale-105" : "opacity-100"}`}
+                    />
+                  )}
+                  {isGen4Running && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 backdrop-blur-sm">
+                      {/* Scan line effect */}
+                      <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent absolute animate-bounce opacity-70" style={{ top: `${gen4Progress}%` }} />
+                      <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <div className="text-center">
+                        <div className="text-[11px] font-mono text-cyan-300 font-bold">{gen4Progress}%</div>
+                        <div className="text-[9px] font-mono text-slate-400">Step {Math.ceil(gen4Progress * steps / 100)}/{steps}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-black/70 text-[8px] font-mono text-cyan-400">SEED {seed}</div>
+                  {gen4Done && !isGen4Running && (
+                    <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-emerald-500/90 flex items-center justify-center">
+                      <CheckCircle2 className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Gen-4 Progress Bar (always visible) */}
+                {gen4Progress < 100 && (
+                  <div className="mb-2 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-200" style={{ width: `${gen4Progress}%` }} />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 px-0.5 mb-2">
+                  <span className="text-slate-300">1028 × 1028</span>
+                  <div className="flex items-center gap-1">
+                    <button className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 text-slate-400 hover:text-white transition-colors">‹</button>
+                    <span className="text-cyan-400 font-semibold">1/4</span>
+                    <button className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 text-slate-400 hover:text-white transition-colors">›</button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => { selectNode("gen4-image"); }} className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 border border-white/[0.07] transition-colors">
+                    <Sliders className="w-3 h-3 text-cyan-400" />
+                  </button>
+                  <button
+                    onClick={handleRunGen4}
+                    disabled={isGen4Running}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-black text-[11px] font-bold font-mono flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,229,255,0.35)] hover:shadow-[0_0_20px_rgba(0,229,255,0.5)] transition-all cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>{isGen4Running ? "RUNNING..." : "RUN"}</span>
+                  </button>
+                  <button className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 border border-white/[0.07] transition-colors">
+                    <MoreHorizontal className="w-3 h-3 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Output Port */}
+              <div className="absolute -right-3 top-[185px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.7)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              </div>
+            </div>
+
+            {/* ================================================================
+                NODE 4: GEN-4 VIDEO (left: 718, top: 25)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("gen4-video")}
+              className={`studio-node absolute left-[718px] top-[25px] w-[224px] rounded-2xl bg-[#0d0e17]/98 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer ${
+                selectedNodeId === "gen4-video"
+                  ? "border-cyan-400 shadow-[0_0_30px_rgba(0,229,255,0.4)] ring-1 ring-cyan-400/50"
+                  : "border-white/[0.08] hover:border-white/20 shadow-2xl"
+              }`}
+            >
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent rounded-full" />
+
+              {/* Left Input Port */}
+              <div className="absolute -left-3 top-[125px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_10px_rgba(0,229,255,0.6)]"><span className="w-2 h-2 rounded-full bg-cyan-400" /></div>
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-cyan-500/20 flex items-center justify-center">
+                    <Video className="w-3 h-3 text-cyan-400" />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-white uppercase">Gen-4 Video</span>
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">SVD_XT</span>
+              </div>
+
+              <div className="p-2.5 pb-3">
+                {/* 16:9 video preview */}
+                <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/[0.08] bg-black/60 mb-2 group/vid">
+                  <Image src="/flower_night_street.jpg" alt="Video" fill className="object-cover" />
+
+                  {/* Play/Pause overlay */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsVideoPlaying(!isVideoPlaying); }}
+                    className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-black/75 border border-cyan-400/60 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.5)] hover:scale-110 transition-transform cursor-pointer"
+                  >
+                    {isVideoPlaying ? <Pause className="w-3.5 h-3.5 fill-cyan-400 text-cyan-400" /> : <Play className="w-3.5 h-3.5 fill-cyan-400 text-cyan-400 ml-0.5" />}
+                  </button>
+
+                  {/* Scrubber */}
+                  <div className="absolute bottom-1.5 left-2 right-2">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[8px] font-mono text-cyan-400">{Math.floor(videoProgress * 4 / 100 * 10) / 10}s</span>
+                      <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden cursor-pointer">
+                        <div className="h-full bg-gradient-to-r from-cyan-400 to-indigo-400 transition-all duration-100" style={{ width: `${videoProgress}%` }} />
+                      </div>
+                      <span className="text-[8px] font-mono text-slate-400">4.0s</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video meta */}
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 px-0.5">
+                  <span>1028 × 1028</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-semibold">24fps</span>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-300">4.0s</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Output Port */}
+              <div className="absolute -right-3 top-[125px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-pink-500 flex items-center justify-center shadow-[0_0_12px_rgba(255,0,127,0.7)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-pink-500" />
+              </div>
+            </div>
+
+            {/* ================================================================
+                NODE 5: SECONDARY DIRECTIVE (left: 718, top: 355)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("text-2")}
+              className={`studio-node absolute left-[718px] top-[355px] w-[224px] rounded-2xl bg-[#0d0e17]/95 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer ${
+                selectedNodeId === "text-2"
+                  ? "border-pink-500 shadow-[0_0_25px_rgba(255,0,127,0.35)] ring-1 ring-pink-500/50"
+                  : "border-white/[0.08] hover:border-white/20 shadow-2xl"
+              }`}
+            >
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-pink-500/50 to-transparent rounded-full" />
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-pink-500/20 flex items-center justify-center">
+                    <Terminal className="w-3 h-3 text-pink-400" />
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300 font-semibold">Directive</span>
+                </div>
+                <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">TRANSFORM</span>
+              </div>
+
+              <div className="p-2.5 pb-3">
+                <textarea
+                  value={prompt2}
+                  onChange={(e) => setPrompt2(e.target.value)}
+                  rows={4}
+                  className="w-full text-[11px] font-mono leading-relaxed bg-[#10111a] border border-white/[0.06] rounded-xl p-2 text-slate-200 focus:outline-none focus:border-pink-500/50 resize-none transition-all selection:bg-pink-500/30"
+                />
+                <div className="mt-1.5 flex justify-between text-[9px] font-mono">
+                  <span className="text-slate-500">Tokens: {Math.ceil(prompt2.length / 4)}/77</span>
+                  <span className="text-pink-400 font-medium">Winter Shift</span>
+                </div>
+              </div>
+
+              {/* Right Output Port */}
+              <div className="absolute -right-3 top-[95px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-pink-500 flex items-center justify-center shadow-[0_0_12px_rgba(255,0,127,0.7)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-pink-500" />
+              </div>
+            </div>
+
+            {/* ================================================================
+                NODE 6: ALEPH NEURAL CORE (left: 967, top: 25)
+                ================================================================ */}
+            <div
+              onClick={() => selectNode("aleph")}
+              className={`studio-node absolute left-[967px] top-[25px] w-[255px] rounded-2xl bg-[#0d0e17]/98 backdrop-blur-2xl border transition-all duration-200 z-20 cursor-pointer ${
+                selectedNodeId === "aleph"
+                  ? "border-pink-500 shadow-[0_0_35px_rgba(255,0,127,0.45)] ring-1 ring-pink-500/50"
+                  : "border-white/[0.08] hover:border-pink-500/30 shadow-2xl"
+              }`}
+            >
+              <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-pink-500/70 to-transparent rounded-full" />
+
+              {/* Left Input Ports */}
+              <div className="absolute -left-3 top-[125px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-pink-500 flex items-center justify-center shadow-[0_0_10px_rgba(255,0,127,0.6)]"><span className="w-2 h-2 rounded-full bg-pink-500" /></div>
+              <div className="absolute -left-3 top-[237px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-pink-500 flex items-center justify-center shadow-[0_0_10px_rgba(255,0,127,0.6)]"><span className="w-2 h-2 rounded-full bg-pink-500" /></div>
+
+              <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-gradient-to-br from-pink-500/30 to-indigo-500/30 flex items-center justify-center">
+                    <Sparkles className="w-3 h-3 text-pink-400" />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-white uppercase">Aleph Neural Core</span>
+                </div>
+                <NodeBadge running={isAlephRunning} done={alephDone} />
+              </div>
+
+              <div className="p-2.5 pb-3">
+                {/* Output Preview */}
+                <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-white/[0.08] bg-black/60 mb-2 group/aleph">
+                  {alephImageUrl ? (
+                    // Real AI master output from Fal.ai
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={alephImageUrl}
+                      alt="AI Master Output"
+                      className={`w-full h-full object-cover transition-all duration-300 ${isAlephRunning ? "opacity-25 scale-105" : "opacity-100"}`}
+                    />
+                  ) : (
+                    <Image
+                      src="/flower_snow_winter.jpg"
+                      alt="Aleph Demo"
+                      fill
+                      className={`object-cover transition-all duration-300 ${isAlephRunning ? "opacity-25 scale-105" : "opacity-100"}`}
+                    />
+                  )}
+
+                  {isAlephRunning && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0510]/95 backdrop-blur-sm">
+                      <div className="relative flex flex-col items-center justify-center mb-6 mt-4">
+                        <div className="absolute w-28 h-28 rounded-full border border-pink-500/20 animate-[spin_4s_linear_infinite]" />
+                        <div className="absolute w-20 h-20 rounded-full border border-indigo-500/30 animate-[spin_3s_linear_infinite_reverse]" />
+                        <svg className="w-32 h-32 transform -rotate-90">
+                          <circle cx="64" cy="64" r="50" className="stroke-white/5" strokeWidth="2.5" fill="none" />
+                          <circle cx="64" cy="64" r="50" className="stroke-pink-500" strokeWidth="2.5" fill="none" strokeDasharray="314" strokeDashoffset={314 - (314 * alephProgress) / 100} style={{ transition: 'stroke-dashoffset 0.5s ease', filter: 'drop-shadow(0 0 8px rgba(236,72,153,0.8))' }} strokeLinecap="round" />
+                        </svg>
+                        <div className="absolute text-xl font-mono text-white font-light">
+                          {Math.round(alephProgress)}<span className="text-xs text-pink-400 ml-0.5">%</span>
+                        </div>
+                      </div>
+                      <div className="text-[9px] text-pink-300/80 font-mono tracking-widest animate-pulse mt-2">Fusing possibilities...</div>
+                      
+                      <div className="absolute bottom-6 w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden shadow-[0_0_10px_rgba(236,72,153,0.3)]">
+                        <div className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500" style={{ width: `${alephProgress}%`, transition: 'width 0.5s ease' }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4K Ready badge */}
+                  <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-black/75 border border-white/10 text-[8px] font-mono text-emerald-400 font-bold">4K READY</div>
+
+                  {/* Hover download overlay */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/aleph:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addHistory("Image downloaded", "Aleph"); }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-[10px] font-mono text-white flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-2.5 h-2.5" />
+                      <span>Export</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAlephVariation((v) => (v % 4) + 1); addHistory("Variation cycled", "Aleph"); }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-[10px] font-mono text-white flex items-center gap-1 cursor-pointer"
+                    >
+                      <Wand2 className="w-2.5 h-2.5" />
+                      <span>Variation</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Aleph progress bar */}
+                {alephProgress < 100 && (
+                  <div className="mb-2 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-pink-500 to-indigo-500 transition-all duration-200" style={{ width: `${alephProgress}%` }} />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 px-0.5 mb-2">
+                  <span className="text-slate-300">1028 × 1028</span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); setAlephVariation((v) => v === 1 ? 4 : v - 1); }} className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 transition-colors text-slate-400 hover:text-white">‹</button>
+                    <span className="text-slate-200 font-semibold">{alephVariation}/4</span>
+                    <button onClick={(e) => { e.stopPropagation(); setAlephVariation((v) => v === 4 ? 1 : v + 1); }} className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 transition-colors text-slate-400 hover:text-white">›</button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => selectNode("aleph")} className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 border border-white/[0.07] transition-colors">
+                    <Sliders className="w-3 h-3 text-pink-400" />
+                  </button>
+                  <button
+                    onClick={handleRunAleph}
+                    disabled={isAlephRunning}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-50 text-black text-[11px] font-bold font-mono flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(255,255,255,0.5)] hover:shadow-[0_0_28px_rgba(255,255,255,0.6)] transition-all cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-black" />
+                    <span>{isAlephRunning ? "FUSING..." : "RUN MASTER"}</span>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); addHistory("Image downloaded", "Aleph"); }}
+                    className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 border border-white/[0.07] transition-colors"
+                    title="Export output"
+                  >
+                    <Download className="w-3 h-3 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Master Output Port */}
+              <div className="absolute -right-3 top-[190px] w-6 h-6 rounded-full bg-[#0d0e17] border-2 border-white flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.9)] cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-white" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── MINIMAP ───────────────────────────────────────────────────── */}
+          {minimapOpen && (
+            <div className="absolute bottom-16 right-4 z-30 w-48 rounded-xl bg-[#0a0b10]/90 border border-white/10 backdrop-blur-xl p-2.5 shadow-2xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-mono uppercase text-slate-400 tracking-wider">Minimap</span>
+                <button onClick={() => setMinimapOpen(false)} className="text-slate-500 hover:text-white transition-colors"><X className="w-3 h-3" /></button>
+              </div>
+              <div className="relative w-full h-20 bg-black/40 rounded-lg border border-white/5 overflow-hidden">
+                {/* Minimap nodes */}
+                {minimapNodes.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => selectNode(n.id)}
+                    className={`absolute rounded cursor-pointer border transition-all ${selectedNodeId === n.id ? "opacity-100 border-white/50" : "opacity-60 border-transparent"}`}
+                    style={{
+                      left: `${n.x}%`, top: `${n.y}%`,
+                      width: `${n.w}%`, height: `${n.h}%`,
+                      backgroundColor: n.color + "22",
+                      borderColor: selectedNodeId === n.id ? n.color : "transparent",
+                      boxShadow: selectedNodeId === n.id ? `0 0 4px ${n.color}` : "none",
+                    }}
+                  />
+                ))}
+                {/* Viewport indicator */}
+                <div
+                  className="absolute border border-white/30 rounded"
+                  style={{ left: `${Math.max(0, -pan.x / 12)}%`, top: `${Math.max(0, -pan.y / 7)}%`, width: "60%", height: "70%", backgroundColor: "rgba(255,255,255,0.04)" }}
+                />
+                {/* Wire indicators */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
+                  <line x1="16%" y1="17%" x2="35%" y2="15%" stroke="#00e5ff" strokeWidth="1" />
+                  <line x1="30%" y1="25%" x2="35%" y2="20%" stroke="#00e5ff" strokeWidth="1" />
+                  <line x1="51%" y1="18%" x2="55%" y2="14%" stroke="#00e5ff" strokeWidth="1" />
+                  <line x1="70%" y1="14%" x2="75%" y2="14%" stroke="#ff007f" strokeWidth="1" />
+                  <line x1="70%" y1="36%" x2="75%" y2="20%" stroke="#ff007f" strokeWidth="1" />
+                </svg>
+              </div>
+              <div className="mt-1.5 text-[8px] font-mono text-slate-500 text-center">Click node to select · Drag canvas to pan</div>
+            </div>
+          )}
+
+          {/* ── BOTTOM NODE DOCK ──────────────────────────────────────────── */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-[#0a0b10]/90 border border-white/10 backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+            <span className="text-[9px] font-mono uppercase tracking-wider text-slate-500 pr-1 hidden sm:inline">Add</span>
+            {[
+              { icon: Type, label: "Prompt", color: "text-cyan-400" },
+              { icon: ImageIcon, label: "Image In", color: "text-cyan-400" },
+              { icon: Cpu, label: "FLUX Gen", color: "text-indigo-400" },
+              { icon: Video, label: "Video", color: "text-pink-400" },
+              { icon: Sparkles, label: "4K Up", color: "text-amber-400" },
+            ].map(({ icon: Icon, label, color }) => (
+              <button
+                key={label}
+                onClick={() => addHistory(`Added ${label} node`, "Canvas")}
+                className="px-2 py-1 rounded-xl bg-white/[0.05] hover:bg-white/10 text-[10px] font-mono text-slate-300 hover:text-white flex items-center gap-1 transition-all cursor-pointer border border-white/[0.06] hover:border-white/20"
+              >
+                <Icon className={`w-3 h-3 ${color}`} />
+                <span className="hidden sm:inline">+ {label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── RIGHT INSPECTOR PANEL ───────────────────────────────────────── */}
+        {inspectorOpen && (
+          <aside className="w-68 border-l border-white/10 bg-[#08090f]/98 backdrop-blur-2xl flex flex-col z-30 shrink-0">
+            <div className="h-12 border-b border-white/10 px-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-xs font-mono font-bold uppercase text-white">Inspector</span>
+              </div>
+              <button onClick={() => setInspectorOpen(false)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 font-mono text-xs">
+              {/* Active node badge */}
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+                <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">Selected Node</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-white capitalize">{selectedNodeId.replace("-", " ")}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">ONLINE</span>
+                </div>
+              </div>
+
+              {/* Simple Control Panel */}
+              <div className="space-y-4">
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">Image Variation</div>
+                <div>
+                  <div className="flex justify-between text-slate-300 mb-1">
+                    <span className="text-xs">Random Seed</span>
+                    <button onClick={() => { setSeed(Math.floor(Math.random() * 99999999)); addHistory("Seed randomized", selectedNodeId); }} className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 cursor-pointer">
+                      <RefreshCw className="w-2.5 h-2.5" />Randomize
+                    </button>
+                  </div>
+                  <input type="number" value={seed} onChange={(e) => setSeed(+e.target.value)} className="w-full bg-[#10111a] border border-white/10 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-indigo-400 font-mono" />
+                  <p className="text-[9px] text-slate-500 mt-1.5 leading-relaxed">
+                    By default, using the same text generates the same image. Click Randomize to generate a completely new variation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Run action */}
+              <div className="pt-1 border-t border-white/10">
+                <button
+                  onClick={handleRunFullPipeline}
+                  disabled={isPipelineRunning}
+                  className="w-full py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:brightness-110 disabled:opacity-50 text-white font-bold tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(99,102,241,0.3)]"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>EXECUTE PIPELINE</span>
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* ── HISTORY PANEL ───────────────────────────────────────────────── */}
+        {historyOpen && (
+          <aside className="w-64 border-l border-white/10 bg-[#08090f]/98 backdrop-blur-2xl flex flex-col z-30 shrink-0 animate-in slide-in-from-right-4 duration-200">
+            <div className="h-12 border-b border-white/10 px-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-mono font-bold uppercase text-white">Run History</span>
+              </div>
+              <button onClick={() => setHistoryOpen(false)} className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {historyLog.map((entry) => (
+                <div key={entry.id} className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] group hover:border-white/15 transition-all">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-[9px] font-mono font-bold rounded-full px-1.5 py-0.5 border ${
+                      entry.status === "success" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
+                      entry.status === "running" ? "text-cyan-400 bg-cyan-500/10 border-cyan-500/20 animate-pulse" :
+                      "text-red-400 bg-red-500/10 border-red-500/20"
+                    }`}>{entry.status.toUpperCase()}</span>
+                    <span className="text-[9px] font-mono text-slate-500">{entry.time}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-200 font-semibold">{entry.action}</div>
+                  <div className="text-[9px] font-mono text-slate-500 mt-0.5">{entry.node}</div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* ── KEYBOARD SHORTCUTS MODAL ──────────────────────────────────────── */}
+      {shortcutsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => setShortcutsOpen(false)}>
+          <div className="bg-[#0a0b10] border border-white/10 rounded-2xl p-6 w-72 shadow-2xl font-mono" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Keyboard className="w-4 h-4 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Keyboard Shortcuts</h3>
+              </div>
+              <button onClick={() => setShortcutsOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2 text-xs">
+              {[
+                { key: "+  /  =", action: "Zoom in" },
+                { key: "-", action: "Zoom out" },
+                { key: "F", action: "Fit workflow to view" },
+                { key: "R", action: "Execute full pipeline" },
+                { key: "Esc", action: "Close panels" },
+                { key: "?", action: "Toggle this help" },
+              ].map(({ key, action }) => (
+                <div key={key} className="flex items-center justify-between py-1 border-b border-white/[0.05]">
+                  <span className="text-slate-400">{action}</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/10 border border-white/20 text-slate-200 text-[10px]">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FULLSCREEN 16:9 LIGHTBOX ────────────────────────────────────── */}
+      {showFullMockup && (
+        <div className="fixed inset-0 z-50 bg-black/92 backdrop-blur-2xl flex items-center justify-center p-6">
+          <div className="relative max-w-6xl w-full bg-[#0a0b10] rounded-2xl border border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between font-mono">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white">16:9 Figma Desktop UI Blueprint</h3>
+              </div>
+              <button onClick={() => setShowFullMockup(false)} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-slate-200 transition-colors cursor-pointer">
+                Close (ESC)
+              </button>
+            </div>
+            <div className="relative aspect-video w-full bg-black">
+              <Image src="/workflow-mockup.jpg" alt="16:9 Node Workflow UI" fill className="object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

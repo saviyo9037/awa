@@ -1,0 +1,117 @@
+{
+  "image": [
+    {
+      "id": "portraits",
+      "name": "Portraits & Characters",
+      "slug": "portraits"
+    },
+    {
+      "id": "3d-renders",
+      "name": "3D Renders & Abstract",
+      "slug": "3d-renders"
+    },
+    {
+      "id": "posters",
+      "name": "Posters & Typography",
+      "slug": "posters"
+    },
+    {
+      "id": "landscapes",
+      "name": "Landscapes & Scenery",
+      "slug": "landscapes"
+    },
+    {
+      "id": "products",
+      "name": "Product Showcases",
+      "slug": "products"
+    },
+    {
+      "id": "anime",
+      "name": "Anime & Concept Art",
+      "slug": "anime"
+    }
+  ],
+  "video": [
+    {
+      "id": "cinematic-motion",
+      "name": "Cinematic Camera Pan",
+      "slug": "cinematic-motion"
+    },
+    {
+      "id": "drone-aerial",
+      "name": "Drone & Aerial Flyovers",
+      "slug": "drone-aerial"
+    },
+    {
+      "id": "hyper-lapse",
+      "name": "Hyper-lapse & Stream",
+      "slug": "hyper-lapse"
+    },
+    {
+      "id": "commercials",
+      "name": "Product Ads & Commercials",
+      "slug": "commercials"
+    },
+    {
+      "id": "sci-fi-vfx",
+      "name": "Sci-Fi & VFX Loops",
+      "slug": "sci-fi-vfx"
+    }
+  ],
+  "website": [
+    {
+      "id": "landing-pages",
+      "name": "Landing Pages & Hero Grids",
+      "slug": "landing-pages"
+    },
+    {
+      "id": "saas-dashboards",
+      "name": "SaaS Dashboards & Analytics",
+      "slug": "saas-dashboards"
+    },
+    {
+      "id": "ecommerce",
+      "name": "E-Commerce & Storefronts",
+      "slug": "ecommerce"
+    },
+    {
+      "id": "portfolios",
+      "name": "Portfolios & Creative Studios",
+      "slug": "portfolios"
+    },
+    {
+      "id": "mobile-apps",
+      "name": "Mobile App UI (iOS / Android)",
+      "slug": "mobile-apps"
+    }
+  ],
+  "slides": [
+    {
+      "id": "pitch-decks",
+      "name": "Pitch Decks & Startups",
+      "slug": "pitch-decks"
+    },
+    {
+      "id": "keynotes",
+      "name": "Keynote & Conferences",
+      "slug": "keynotes"
+    },
+    {
+      "id": "infographics",
+      "name": "Infographics & Data Slides",
+      "slug": "infographics"
+    },
+    {
+      "id": "corporate-reports",
+      "name": "Corporate & Annual Reports",
+      "slug": "corporate-reports"
+    }
+  ],
+  "cat-1790172370058": [
+    {
+      "id": "dsvknsd",
+      "name": "dsvknsd",
+      "slug": "dsvknsd"
+    }
+  ]
+}
